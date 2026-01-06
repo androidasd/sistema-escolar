@@ -23,7 +23,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Tenta importar bibliotecas extras, se não tiver, usa padrão
+# Tenta importar bibliotecas extras
 try:
     import plotly.express as px
     from streamlit_option_menu import option_menu
@@ -37,27 +37,24 @@ try:
     g = Github(TOKEN)
     user = g.get_user()
     
-    # LÓGICA INTELIGENTE PARA ACHAR O REPOSITÓRIO
+    # LÓGICA INTELIGENTE
     repo_ref = None
-    # 1. Tenta pelo nome exato ou parecido
     for repo in user.get_repos():
         if "sistema" in repo.name.lower() or "escolar" in repo.name.lower() or "emeif" in repo.name.lower():
             repo_ref = repo
             break
             
-    # 2. Se não achou, pega o último modificado
     if not repo_ref:
         repos = list(user.get_repos())
         if repos:
             repo_ref = repos[0]
 
     if not repo_ref:
-        st.error("❌ Não encontrei nenhum repositório no seu GitHub.")
+        st.error("❌ Repositório não encontrado.")
         st.stop()
         
 except Exception as e:
-    st.error(f"⚙️ Erro de Conexão com GitHub: {e}")
-    st.info("Verifique se o Token está nos Secrets.")
+    st.error(f"⚙️ Erro de Conexão: {e}")
     st.stop()
 
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
@@ -67,9 +64,7 @@ ARQ_CONCLUINTES = 'CONCLUINTES- PA-RESSACA.docx'
 
 @st.cache_data(ttl=60)
 def carregar_dados_simples():
-    """Lê os arquivos Word e retorna lista limpa"""
-    lista_final = []
-    
+    """Lê os arquivos Word"""
     def ler_arquivo(nome_arq, categoria):
         local = []
         try:
@@ -121,7 +116,6 @@ df = pd.DataFrame(dados)
 # --- MENU LATERAL ---
 with st.sidebar:
     st.title("🏫 Menu")
-    
     if tem_visuais:
         escolha = option_menu(
             menu_title=None,
@@ -148,7 +142,6 @@ if escolha == "Dashboard":
         c3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
         
         st.divider()
-        
         if tem_visuais:
             col_a, col_b = st.columns(2)
             with col_a:
@@ -163,25 +156,32 @@ if escolha == "Dashboard":
 
 if escolha == "Pesquisar":
     st.title("🔍 Buscar Aluno")
-    busca = st.text_input("Nome:")
     
-    if not df.empty:
-        df_show = df
-        if busca:
+    # CORREÇÃO AQUI: Só mostra a tabela SE digitar algo
+    busca = st.text_input("Digite o nome do aluno para ver o resultado:", placeholder="Ex: Ana Clara...")
+    
+    if busca:
+        if not df.empty:
+            # Filtra pelo nome digitado
             df_show = df[df['Nome'].str.contains(busca.upper(), na=False)]
-        
-        # AQUI ESTAVA O ERRO - REMOVI O 'BadgeColumn' QUE TRAVAVA
-        st.dataframe(
-            df_show, 
-            use_container_width=True, 
-            height=500,
-            column_config={
-                "Nome": st.column_config.TextColumn("Nome Completo"),
-                "Categoria": st.column_config.TextColumn("Status"), # Corrigido para Texto Simples
-                "Obs": st.column_config.TextColumn("Observações"),
-            },
-            hide_index=True
-        )
+            
+            if not df_show.empty:
+                st.success(f"{len(df_show)} aluno(s) encontrado(s).")
+                st.dataframe(
+                    df_show, 
+                    use_container_width=True, 
+                    height=500,
+                    column_config={
+                        "Nome": st.column_config.TextColumn("Nome Completo"),
+                        "Categoria": st.column_config.TextColumn("Status"),
+                        "Obs": st.column_config.TextColumn("Observações"),
+                    },
+                    hide_index=True
+                )
+            else:
+                st.warning("Nenhum aluno encontrado com esse nome.")
+    else:
+        st.info("👆 Digite um nome na caixa acima para começar a pesquisa.")
 
 if escolha == "Cadastrar":
     st.title("📝 Nova Matrícula")
