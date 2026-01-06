@@ -22,8 +22,9 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         remetente = st.secrets["EMAIL_USER"]
         senha_app = st.secrets["EMAIL_PASSWORD"]
         
-        # Remove espaços da senha caso o usuário tenha deixado
-        senha_app = senha_app.replace(" ", "")
+        # GARANTIA: Remove qualquer espaço em branco que tenha ficado na senha
+        senha_app = senha_app.replace(" ", "").strip()
+        remetente = remetente.strip()
         
         # Cria a mensagem
         msg = MIMEMultipart()
@@ -55,7 +56,6 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         server.quit()
         return True, "Enviado"
     except Exception as e:
-        # Retorna o erro exato para mostrar na tela
         return False, str(e)
 
 # --- CONEXÃO GITHUB ---
