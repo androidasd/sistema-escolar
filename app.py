@@ -11,9 +11,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from streamlit_option_menu import option_menu
 
-# --- CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA COISA) ---
-# Tenta carregar configs locais antes de conectar, apenas para pegar o nome
-# Mas como precisamos conectar no Github para pegar o config.json, definimos um padrão primeiro.
+# --- CONFIGURAÇÃO DA PÁGINA ---
 ST_COR_PADRAO = "#00A8C6"
 ST_TITULO_PADRAO = "SISTEMA ESCOLAR"
 
@@ -140,26 +138,23 @@ LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3
 # --- CSS PREMIUM E MODERNO ---
 st.markdown(f"""
 <style>
-    /* Importando fonte bonita */
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
-
-    html, body, [class*="css"] {{
-        font-family: 'Roboto', sans-serif;
-    }}
+    html, body, [class*="css"] {{ font-family: 'Roboto', sans-serif; }}
     
-    /* Remove padding excessivo do Streamlit */
-    .block-container {{ padding-top: 1rem; padding-bottom: 5rem; }}
-    #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
+    /* ESCONDER ITENS PADRÃO DO STREAMLIT (MANAGE APP, FOOTER, HEADER) */
+    .stApp > header {{visibility: hidden;}}
+    #MainMenu {{visibility: hidden;}}
+    footer {{visibility: hidden;}}
+    [data-testid="stToolbar"] {{visibility: hidden !important; display: none !important;}}
+    .block-container {{ padding-top: 2rem; padding-bottom: 5rem; }}
 
-    /* VARIÁVEIS DE COR */
     :root {{
         --primary: {COR_TEMA};
         --light-bg: #f8f9fa;
         --card-bg: #ffffff;
-        --text-dark: #2c3e50;
     }}
 
-    /* ESTILO DOS CARDS (MÉTRICAS) */
+    /* CARDS DE MÉTRICAS */
     div[data-testid="metric-container"] {{
         background-color: var(--card-bg);
         border-radius: 10px;
@@ -184,25 +179,25 @@ st.markdown(f"""
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
 
-    /* LOGIN CENTRALIZADO */
+    /* LOGIN CONTAINER COMPACTO */
     .login-container {{
         background: white;
-        padding: 40px;
-        border-radius: 20px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        border: 1px solid #eee;
     }}
     
-    /* CONTAINER DO HEADER (TOPO) */
-    .header-style {{
+    /* PROFILE POPUP CORREÇÃO */
+    .profile-popup-box {{
         background-color: white;
-        padding: 15px 20px;
-        border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 3px solid var(--primary);
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        color: #333;
+        margin-top: 5px;
+        font-size: 14px;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -211,36 +206,45 @@ st.markdown(f"""
 if 'user_info' not in st.session_state: st.session_state['user_info'] = None
 
 # ==============================================================================
-# TELA DE LOGIN (DESIGN LIMPO)
+# TELA DE LOGIN (COMPACTA)
 # ==============================================================================
 if not st.session_state['user_info']:
-    col_e, col_c, col_d = st.columns([1, 1.5, 1])
+    # AJUSTE DAS COLUNAS: [3, 2, 3] faz a coluna do meio ficar menor
+    col_e, col_c, col_d = st.columns([3, 2, 3])
+    
     with col_c:
         st.write("")
         st.write("")
-        # Simula um "Card" usando container
+        # Container do Login
         with st.container():
             st.markdown(f"""
             <div class="login-container" style="text-align:center;">
-                <img src="{LOGO_URL}" width="100" style="margin-bottom:15px;">
-                <h2 style="color:{COR_TEMA}; margin:0;">{NOME_ESCOLA}</h2>
-                <p style="color:gray;">Portal de Gestão Acadêmica</p>
-                <hr style="opacity:0.2">
+                <img src="{LOGO_URL}" width="80" style="margin-bottom:10px;">
+                <h3 style="color:{COR_TEMA}; margin:0; font-weight:700;">{NOME_ESCOLA}</h3>
+                <p style="color:gray; font-size:12px;">Gestão Acadêmica</p>
+                <hr style="opacity:0.2; margin: 15px 0;">
             </div>
             """, unsafe_allow_html=True)
             
-            tab1, tab2 = st.tabs(["🔐 ACESSAR", "📝 CADASTRAR"])
+            tab1, tab2 = st.tabs(["ENTRAR", "CADASTRAR"])
             
             with tab1:
                 with st.form("login_frm"):
                     email = st.text_input("E-mail")
                     senha = st.text_input("Senha", type="password")
-                    if st.form_submit_button("ENTRAR", use_container_width=True):
+                    if st.form_submit_button("ACESSAR", use_container_width=True):
                         try: s_adm = st.secrets["SENHA_SISTEMA"]
                         except: s_adm = "admin"
                         
+                        # Admin Personalizado
                         if email.lower() == "admin@emeifparessaca.com" and senha == s_adm:
-                            st.session_state['user_info'] = {"username": "Admin", "name": "Super Administrador", "role": "admin", "email": "admin@emeifparessaca.com", "unit": "Diretoria"}
+                            st.session_state['user_info'] = {
+                                "username": "Admin", 
+                                "name": "Administrador Principal", 
+                                "role": "admin", 
+                                "email": "admin@emeifparessaca.com", 
+                                "unit": "SUPER USÚARIO"
+                            }
                             st.rerun()
                             
                         db, _ = carregar_json(ARQ_USERS)
@@ -260,210 +264,154 @@ if not st.session_state['user_info']:
                             lst = db.get("users", [])
                             if any(x.get('email') == e for x in lst): st.error("E-mail já existe.")
                             else:
-                                with st.spinner("Registrando..."):
+                                with st.spinner("Criando..."):
                                     lst.append({"username": e.split("@")[0], "password": hash_senha(s), "name": n, "email": e, "role": "user", "status": "pending", "unit": "Geral"})
                                     if not db: db = {"users": []}
                                     db['users'] = lst
                                     salvar_json(ARQ_USERS, db, sha, f"Reg {e}")
                                     env, erro = enviar_email_boas_vindas(e, n)
-                                    if env: st.success("Verifique seu e-mail!")
-                                    else: st.warning(f"Salvo, mas erro no email: {erro}")
+                                    if env: st.success("Solicitação enviada!")
+                                    else: st.warning(f"Salvo (Sem email)")
     st.stop()
 
 # ==============================================================================
-# ÁREA LOGADA - LAYOUT PREMIUM
+# ÁREA LOGADA
 # ==============================================================================
 user = st.session_state['user_info']
 
-# --- HEADER (CABEÇALHO) PERSONALIZADO ---
-# Usamos colunas nativas do Streamlit para evitar erros de HTML/CSS
+# --- HEADER ---
 with st.container():
-    # Estilo de fundo branco e logo
-    c_logo, c_menu_fake, c_user = st.columns([2, 0.5, 3])
-    
+    c_logo, c_user = st.columns([2, 3])
     with c_logo:
-        # Logo e Nome Lado a Lado
         st.markdown(f"""
-        <div style="display:flex; align-items:center; gap:15px;">
-            <img src="{LOGO_URL}" width="50">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <img src="{LOGO_URL}" width="40">
             <div>
-                <h3 style="margin:0; color:{COR_TEMA}; font-weight:800;">{NOME_ESCOLA}</h3>
-                <small style="color:gray;">Sistema de Gestão</small>
+                <h4 style="margin:0; color:{COR_TEMA}; font-weight:800;">{NOME_ESCOLA}</h4>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
     with c_user:
-        # Área do Usuário + Botão Sair alinhados a direita
-        c_u_info, c_u_btn = st.columns([3, 1])
-        with c_u_info:
-            st.markdown(f"""
-            <div style="text-align:right; line-height:1.2;">
-                <span style="font-weight:bold; color:#333;">{user['name']}</span><br>
-                <span style="font-size:12px; color:{COR_TEMA}; background:#ebfbfc; padding:2px 8px; border-radius:10px;">{user['role'].upper()}</span>
-            </div>
-            """, unsafe_allow_html=True)
-        with c_u_btn:
-            if st.button("SAIR", key="logout_top"):
+        # Perfil com Popup Corrigido (Usando st.popover ou Expander seria ideal, mas vamos de CSS puro corrigido)
+        c_info, c_logout = st.columns([4, 1])
+        with c_info:
+            with st.expander(f"👤 {user['name'].split()[0]}", expanded=False):
+                st.markdown(f"""
+                <div class="profile-popup-box">
+                    <strong>{user['name']}</strong><br>
+                    <small>{user.get('email')}</small><br>
+                    <span style="color:{COR_TEMA}; font-weight:bold;">{user['role'].upper()}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        with c_logout:
+            if st.button("SAIR"):
                 st.session_state['user_info'] = None
                 st.rerun()
 
 st.divider()
 
-# --- MENU DE NAVEGAÇÃO HORIZONTAL (MUITO MAIS BONITO) ---
-# Se for admin mostra menu extra
+# --- MENU HORIZONTAL ---
 opts = ["Dashboard", "Pesquisar", "Cadastrar Aluno"]
 icons = ["house", "search", "person-plus"]
 if user['role'] == 'admin':
     opts.append("Administração"); icons.append("gear")
 
 selected = option_menu(
-    menu_title=None,
-    options=opts,
-    icons=icons,
-    default_index=0,
-    orientation="horizontal",
+    menu_title=None, options=opts, icons=icons, default_index=0, orientation="horizontal",
     styles={
         "container": {"padding": "0!important", "background-color": "#ffffff", "border-radius": "5px"},
-        "icon": {"color": COR_TEMA, "font-size": "16px"},
-        "nav-link": {"font-size": "15px", "text-align": "center", "margin": "0px", "--hover-color": "#f0f2f6"},
+        "icon": {"color": COR_TEMA, "font-size": "15px"},
+        "nav-link": {"font-size": "14px", "text-align": "center", "margin": "0px", "--hover-color": "#f0f2f6"},
         "nav-link-selected": {"background-color": COR_TEMA, "color": "white"},
     }
 )
+st.write("")
 
-st.write("") # Espaço
-
-# --- CONTEÚDO DAS PÁGINAS ---
+# --- PÁGINAS ---
 if selected in ["Dashboard", "Pesquisar"]:
     df = pd.DataFrame(carregar_dados_word())
 
 if selected == "Dashboard":
     st.subheader("📊 Visão Geral")
     if not df.empty:
-        # Cards de Métricas Estilizados (O CSS já cuida da beleza)
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total de Alunos", len(df))
+        col1.metric("Total", len(df))
         col2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"]))
         col3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
-        
         st.write("")
         st.markdown("##### 📌 Últimas Atualizações")
-        # Tabela limpa
-        st.dataframe(
-            df.tail(10), 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "Categoria": st.column_config.TextColumn("Status", width="medium"),
-                "Nome": st.column_config.TextColumn("Nome do Aluno", width="large")
-            }
-        )
-    else:
-        st.info("Nenhum dado carregado. Verifique os arquivos no GitHub.")
+        st.dataframe(df.tail(8), use_container_width=True, hide_index=True)
+    else: st.info("Sem dados.")
 
 elif selected == "Pesquisar":
     st.subheader("🔍 Buscar Aluno")
-    # Barra de pesquisa moderna
-    busca = st.text_input("Digite o nome do aluno...", placeholder="Ex: Maria da Silva")
-    
+    busca = st.text_input("Digite o nome...", placeholder="Ex: Maria da Silva")
     if busca and not df.empty:
         res = df[df['Nome'].str.contains(busca.upper(), na=False)]
-        if not res.empty:
-            st.success(f"{len(res)} registros encontrados.")
-            st.dataframe(res, use_container_width=True, hide_index=True)
-        else:
-            st.warning("Nenhum aluno encontrado.")
-    elif not busca:
-        st.info("Utilize a barra acima para pesquisar.")
+        if not res.empty: st.success(f"{len(res)} encontrados."); st.dataframe(res, use_container_width=True, hide_index=True)
+        else: st.warning("Não encontrado.")
 
 elif selected == "Cadastrar Aluno":
     st.subheader("📝 Nova Matrícula")
-    # Container branco para o formulário
     with st.container():
         with st.form("novo_aluno_form"):
             c1, c2 = st.columns([1, 4])
             num = c1.text_input("Nº Chamada", placeholder="000")
             nome = c2.text_input("Nome Completo")
-            
             c3, c4 = st.columns(2)
             tipo = c3.radio("Situação", ["Passivos", "Concluintes"], horizontal=True)
-            obs = c4.text_input("Observação (Opcional)")
-            
+            obs = c4.text_input("Observação")
             st.write("")
             if st.form_submit_button("💾 SALVAR ALUNO", use_container_width=True):
                 arq = ARQ_PASSIVOS if tipo == "Passivos" else ARQ_CONCLUINTES
                 if not num: num = "S/N"
-                if salvar_aluno_word(arq, num, nome, obs):
-                    st.toast(f"Aluno {nome} salvo com sucesso!", icon="✅")
-                    time.sleep(1)
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("Erro ao salvar no GitHub.")
+                if salvar_aluno_word(arq, num, nome, obs): st.toast(f"Salvo!", icon="✅"); time.sleep(1); st.cache_data.clear(); st.rerun()
+                else: st.error("Erro ao salvar.")
 
 elif selected == "Administração":
-    st.subheader("⚙️ Painel de Controle")
-    
-    tab_users, tab_pass, tab_config = st.tabs(["Gestão de Usuários", "Senhas", "Configurações"])
+    st.subheader("⚙️ Configurações")
+    tab_users, tab_pass, tab_config = st.tabs(["Usuários", "Senhas", "Sistema"])
     
     with tab_users:
         db, sha = carregar_json(ARQ_USERS)
         if db.get("users"):
             users_df = pd.DataFrame(db['users'])
-            cols = ["name", "email", "status", "role", "unit"]
-            # Garante que as colunas existem
+            cols = ["name", "email", "status", "role"]
             show_df = users_df[[c for c in cols if c in users_df.columns]]
-            
-            edited = st.data_editor(
-                show_df, 
-                key="editor_users", 
-                use_container_width=True,
-                column_config={
-                    "status": st.column_config.SelectboxColumn("Acesso", options=["active", "pending", "disabled"]),
-                    "role": st.column_config.SelectboxColumn("Permissão", options=["user", "admin"])
-                }
-            )
-            
-            if st.button("Salvar Alterações de Acesso"):
+            edited = st.data_editor(show_df, key="editor_users", use_container_width=True,
+                column_config={"status": st.column_config.SelectboxColumn("Acesso", options=["active", "pending", "disabled"]),
+                               "role": st.column_config.SelectboxColumn("Nível", options=["user", "admin"])})
+            if st.button("Salvar Acessos"):
                 novos = edited.to_dict('records')
-                # Mescla inteligente
                 lista_final = []
                 for n in novos:
                     orig = next((u for u in db['users'] if u['email'] == n['email']), None)
                     if orig: orig.update(n); lista_final.append(orig)
                     else: lista_final.append(n)
-                
                 db['users'] = lista_final
-                salvar_json(ARQ_USERS, db, sha, "Update Users")
-                st.success("Dados atualizados!")
-                time.sleep(1); st.rerun()
+                salvar_json(ARQ_USERS, db, sha, "Update Users"); st.success("Atualizado!"); time.sleep(1); st.rerun()
                 
     with tab_pass:
-        st.write("Redefinir senha de usuário:")
+        st.write("Trocar senha:")
         db, sha = carregar_json(ARQ_USERS)
         lst = db.get("users", [])
-        sel_user = st.selectbox("Selecione:", [u['email'] for u in lst])
+        sel_user = st.selectbox("Usuário:", [u['email'] for u in lst])
         if sel_user:
             p1 = st.text_input("Nova Senha", type="password")
-            p2 = st.text_input("Repita a Senha", type="password")
-            if st.button("Alterar Senha"):
+            p2 = st.text_input("Repetir Senha", type="password")
+            if st.button("Confirmar Troca"):
                 if p1 == p2:
                     for u in lst:
                         if u['email'] == sel_user: u['password'] = hash_senha(p1)
                     db['users'] = lst
-                    salvar_json(ARQ_USERS, db, sha, "Update pass")
-                    st.success("Senha alterada.")
+                    salvar_json(ARQ_USERS, db, sha, "Update pass"); st.success("Senha atualizada!")
                 else: st.error("Senhas não conferem.")
 
     with tab_config:
-        st.write("Personalizar Sistema:")
+        st.write("Aparência:")
         with st.form("conf_geral"):
-            cn = st.text_input("Nome da Escola", NOME_ESCOLA)
-            cc = st.color_picker("Cor Principal", COR_TEMA)
-            cl = st.text_input("URL da Logo", LOGO_URL)
-            if st.form_submit_button("Salvar Aparência"):
+            cn = st.text_input("Nome", NOME_ESCOLA); cc = st.color_picker("Cor", COR_TEMA); cl = st.text_input("Logo", LOGO_URL)
+            if st.form_submit_button("Salvar"):
                 _, s_c = carregar_json(ARQ_CONFIG)
-                salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, s_c, "Upd Config")
-                st.toast("Configurações salvas. Atualizando...")
-                time.sleep(2); st.rerun()
-
+                salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, s_c, "Upd Config"); st.rerun()
