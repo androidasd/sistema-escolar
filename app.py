@@ -146,38 +146,65 @@ COR_TEMA = config_data.get("theme_color", ST_COR_PADRAO)
 NOME_ESCOLA = config_data.get("school_name", ST_TITULO_PADRAO)
 LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
 
-# --- CSS PREMIUM E MODERNO (REFORÇADO) ---
+# --- CSS PREMIUM E "MODO FANTASMA" (ESCONDE TUDO DO STREAMLIT) ---
 st.markdown(f"""
 <style>
     /* Importa fonte moderna */
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
     html, body, [class*="css"] {{ font-family: 'Roboto', sans-serif; }}
     
-    /* --- CSS REFORÇADO PARA ESCONDER A BARRA DO STREAMLIT --- */
-    /* Esconde o header padrão, menu de hambúrguer e footer */
+    /* === ZONA DE EXCLUSÃO VISUAL DO STREAMLIT === */
+    
+    /* Esconde o Header Superior (onde fica o botão deploy as vezes) */
     header[data-testid="stHeader"] {{
-        visibility: hidden !important;
         display: none !important;
-    }}
-    /* Esconde a barra de ferramentas inferior (onde fica o "Gerenciar aplicativo") */
-    [data-testid="stToolbar"] {{
         visibility: hidden !important;
-        display: none !important;
-        height: 0px !important;
-    }}
-    /* Esconde o rodapé padrão */
-    footer {{
-        visibility: hidden !important;
-        display: none !important;
-    }}
-    /* Esconde o menu principal (três pontinhos) */
-    #MainMenu {{
-        visibility: hidden !important;
-        display: none !important;
     }}
     
-    /* Ajuste de padding para o conteúdo não ficar colado no topo */
-    .block-container {{ padding-top: 2rem; padding-bottom: 5rem; }}
+    /* Esconde a barra de ferramentas inferior (Gerenciar App) */
+    [data-testid="stToolbar"] {{
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+    }}
+    
+    /* Esconde a linha colorida decorativa no topo */
+    [data-testid="stDecoration"] {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+    
+    /* Esconde o botão específico de Deploy */
+    [data-testid="stAppDeployButton"] {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+    
+    /* Esconde o rodapé "Made with Streamlit" */
+    footer {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+    
+    /* Esconde o menu de hambúrguer */
+    #MainMenu {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+    
+    /* Esconde o Widget de Status (canto superior direito) */
+    div[data-testid="stStatusWidget"] {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+    
+    /* Ajuste de padding para compensar o header removido */
+    .block-container {{ 
+        padding-top: 1rem !important; 
+        padding-bottom: 2rem !important; 
+    }}
+
+    /* === ESTILOS DO SISTEMA === */
 
     :root {{
         --primary: {COR_TEMA};
@@ -270,7 +297,7 @@ if not st.session_state['user_info']:
                         # Admin Personalizado
                         if email.lower() == "admin@emeifparessaca.com" and senha == s_adm:
                             st.session_state['user_info'] = {
-                                "username": "Admin", 
+                                "username": "Admin Geral", 
                                 "name": "Administrador Principal", 
                                 "role": "admin", 
                                 "email": "admin@emeifparessaca.com", 
