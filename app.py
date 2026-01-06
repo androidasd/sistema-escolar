@@ -1,128 +1,134 @@
 import streamlit as st
 import pandas as pd
-import os
 from docx import Document
+from github import Github
+import io
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Secretaria Escolar", page_icon="🎓", layout="wide")
+# --- CONFIGURAÇÃO ---
+st.set_page_config(page_title="Secretaria Escolar", page_icon="🏫", layout="wide")
 
-# --- CSS VISUAL (AZUL PROFISSIONAL) ---
-st.markdown("""
-    <style>
-    /* Esconde menu do Streamlit */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+# --- CONEXÃO COM GITHUB (SEGURANÇA) ---
+# Pega a chave que você salvou nos "Secrets" do site
+try:
+    TOKEN = st.secrets["GITHUB_TOKEN"]
+    g = Github(TOKEN)
+    # Substitua pelo SEU usuário e nome do repositório ex: "joao/sistema-escolar"
+    # O sistema tenta achar automático, mas se der erro, coloque manual
+    repo_name = "seu-usuario/sistema-escolar" # <--- ATENÇÃO: O SITE VAI TENTAR DESCOBRIR SOZINHO, MAS SE DER ERRO ALTERE AQUI
     
-    /* Cabeçalho Azul */
-    .header-azul {
-        background: linear-gradient(90deg, #00A8C6 0%, #007EA7 100%);
-        padding: 20px;
-        border-radius: 8px;
-        color: white;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-    
-    /* Cartões de Alunos */
-    .card-aluno {
-        background-color: white;
-        padding: 15px;
-        border-radius: 10px;
-        border-left: 6px solid #ccc;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        margin-bottom: 10px;
-        transition: transform 0.2s;
-    }
-    .card-aluno:hover {
-        transform: scale(1.01);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    </style>
-""", unsafe_allow_html=True)
+    # Tenta descobrir o repositório atual automaticamente
+    user = g.get_user()
+    for repo in user.get_repos():
+        if repo.name == "sistema-escolar":
+            repo_ref = repo
+            break
+except:
+    st.error("ERRO: Configure o 'GITHUB_TOKEN' nas configurações (Secrets) do Streamlit.")
+    st.stop()
 
-# --- NOMES EXATOS DOS SEUS ARQUIVOS ---
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
 ARQ_CONCLUINTES = 'CONCLUINTES- PA-RESSACA.docx'
 
-def ler_tabelas_word(arquivo, tipo_situacao):
-    """Lê as tabelas do Word ignorando cabeçalhos e linhas vazias"""
-    lista = []
-    
-    if not os.path.exists(arquivo):
-        return []
+# --- FUNÇÕES DE BANCO DE DADOS ---
 
+def carregar_dados_github(nome_arquivo):
+    """Baixa o arquivo Word direto do GitHub para ler"""
     try:
-        doc = Document(arquivo)
+        contents = repo_ref.get_contents(nome_arquivo)
+        # Cria um arquivo temporário na memória
+        arquivo_memoria = io.BytesIO(contents.decoded_content)
+        return Document(arquivo_memoria), contents.sha
+    except Exception as e:
+        st.error(f"Erro ao ler {nome_arquivo}: {e}")
+        return None, None
+
+def salvar_no_github(nome_arquivo, documento_docx, sha_original, mensagem):
+    """Envia o arquivo modificado de volta para o GitHub"""
+    try:
+        # Salva o documento modificado em memória
+        arquivo_salvar = io.BytesIO()
+        documento_docx.save(arquivo_salvar)
+        novo_conteudo = arquivo_salvar.getvalue()
+        
+        # Envia para o GitHub (Atualiza o arquivo)
+        repo_ref.update_file(
+            path=nome_arquivo,
+            message=mensagem,
+            content=novo_conteudo,
+            sha=sha_original
+        )
+        st.toast("✅ Salvo no GitHub com sucesso!", icon="☁️")
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar: {e}")
+        return False
+
+def ler_tabela_formatada(doc, tipo):
+    lista = []
+    if doc:
         for tabela in doc.tables:
             for linha in tabela.rows:
-                # Verifica se a linha tem células suficientes
-                # Coluna 0 = Número, Coluna 1 = Nome
                 if len(linha.cells) >= 2:
                     nome = linha.cells[1].text.strip()
                     obs = linha.cells[2].text.strip() if len(linha.cells) > 2 else ""
-                    
-                    # Filtros de limpeza (Ignora cabeçalhos e vazios)
-                    if not nome: continue
-                    if "NOME" in nome.upper(): continue
-                    if "NUMERO" in nome.upper(): continue
-                    
-                    lista.append({
-                        "Nome": nome,
-                        "Situação": tipo_situacao,
-                        "Observação": obs,
-                        "Arquivo": arquivo
-                    })
-    except Exception as e:
-        st.error(f"Erro ao ler {arquivo}: {e}")
-        
+                    if len(nome) > 3 and "NOME" not in nome.upper():
+                        lista.append({"Nome": nome, "Situação": tipo, "Obs": obs})
     return lista
 
-def carregar_tudo():
-    """Junta os dados dos dois arquivos"""
-    dados_p = ler_tabelas_word(ARQ_PASSIVOS, "Passivo")
-    dados_c = ler_tabelas_word(ARQ_CONCLUINTES, "Concluinte")
-    return pd.DataFrame(dados_p + dados_c)
+# --- INTERFACE DO SISTEMA ---
+st.title("🏫 Sistema Escolar Online (Com Salvamento Automático)")
 
-# --- TELA PRINCIPAL ---
+tab1, tab2 = st.tabs(["🔍 Pesquisar", "📝 Cadastrar Novo Aluno"])
 
-st.markdown('<div class="header-azul"><h1>🎓 CADASTRO E BUSCA DE ALUNOS</h1></div>', unsafe_allow_html=True)
+# --- ABA 1: PESQUISAR ---
+with tab1:
+    # Carrega os arquivos do GitHub na hora
+    doc_passivos, sha_p = carregar_dados_github(ARQ_PASSIVOS)
+    doc_concluintes, sha_c = carregar_dados_github(ARQ_CONCLUINTES)
+    
+    lista_final = ler_tabela_formatada(doc_passivos, "Passivo") + ler_tabela_formatada(doc_concluintes, "Concluinte")
+    df = pd.DataFrame(lista_final)
 
-# Verifica arquivos
-if not os.path.exists(ARQ_PASSIVOS) or not os.path.exists(ARQ_CONCLUINTES):
-    st.error("⚠️ FALTAM ARQUIVOS NA PASTA!")
-    st.info(f"Coloque '{ARQ_PASSIVOS}' e '{ARQ_CONCLUINTES}' junto com este arquivo.")
-else:
-    # --- ÁREA DE BUSCA ---
-    termo = st.text_input("🔍 Digite o nome para buscar:", placeholder="Ex: Ana Clara...")
+    busca = st.text_input("Buscar Aluno:", placeholder="Digite o nome...")
+    if busca and not df.empty:
+        res = df[df['Nome'].str.contains(busca, case=False, na=False)]
+        st.dataframe(res, use_container_width=True)
 
-    if termo:
-        df = carregar_tudo()
+# --- ABA 2: CADASTRAR (A MÁGICA) ---
+with tab2:
+    st.header("Cadastrar Novo Aluno")
+    
+    with st.form("form_cadastro"):
+        novo_nome = st.text_input("Nome Completo")
+        nova_obs = st.text_input("Observação")
+        arquivo_destino = st.radio("Onde salvar?", ["EMEF PA-RESSACA (Passivos)", "CONCLUINTES"])
         
-        if not df.empty:
-            # Filtra pelo nome
-            resultado = df[df['Nome'].str.contains(termo, case=False, na=False)]
-            
-            if not resultado.empty:
-                st.success(f"Encontrado(s): {len(resultado)}")
+        enviar = st.form_submit_button("💾 SALVAR NO SISTEMA")
+        
+        if enviar and novo_nome:
+            with st.spinner("Salvando na nuvem..."):
+                # Define qual arquivo abrir
+                if "CONCLUINTES" in arquivo_destino:
+                    nome_arq = ARQ_CONCLUINTES
+                    doc_atual, sha_atual = doc_concluintes, sha_c
+                else:
+                    nome_arq = ARQ_PASSIVOS
+                    doc_atual, sha_atual = doc_passivos, sha_p
                 
-                for i, row in resultado.iterrows():
-                    # Define cor da borda (Azul = Concluinte, Vermelho = Passivo)
-                    cor = "#00A8C6" if row['Situação'] == "Concluinte" else "#FF6B6B"
+                # Adiciona na primeira tabela que achar (ou na última)
+                if len(doc_atual.tables) > 0:
+                    tabela = doc_atual.tables[0] # Pega a primeira tabela
+                    nova_linha = tabela.add_row()
+                    nova_linha.cells[0].text = "NOVO" # Numero
+                    nova_linha.cells[1].text = novo_nome # Nome
+                    if len(nova_linha.cells) > 2:
+                        nova_linha.cells[2].text = nova_obs # Obs
                     
-                    st.markdown(f"""
-                    <div class="card-aluno" style="border-left-color: {cor};">
-                        <h3 style="margin:0; color: #333;">{row['Nome']}</h3>
-                        <p style="margin:5px 0 0 0; color: #555;">
-                            <strong>Situação:</strong> {row['Situação']} <br>
-                            <strong>Obs:</strong> {row['Observação']}
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.warning("Nenhum aluno encontrado.")
-        else:
-            st.info("Nenhum dado encontrado nos arquivos.")
-    else:
-        st.caption("Digite um nome acima para pesquisar em todos os documentos.")
+                    # Salva de volta no GitHub
+                    sucesso = salvar_no_github(nome_arq, doc_atual, sha_atual, f"Adicionado aluno: {novo_nome}")
+                    
+                    if sucesso:
+                        st.success(f"Aluno {novo_nome} cadastrado com sucesso! Pode pesquisar.")
+                        st.rerun() # Atualiza a página
+                else:
+                    st.error("O arquivo Word não tem tabelas para adicionar.")
