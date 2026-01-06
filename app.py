@@ -11,75 +11,64 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from streamlit_option_menu import option_menu
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
+# --- CONFIGURAÇÃO DA PÁGINA (PRIMEIRA LINHA) ---
 ST_COR_PADRAO = "#00A8C6"
 ST_TITULO_PADRAO = "SISTEMA ESCOLAR"
 
 st.set_page_config(page_title=ST_TITULO_PADRAO, page_icon="🎓", layout="wide")
 
-# --- CSS NUCLEAR (A SOLUÇÃO DEFINITIVA) ---
+# --- CSS NUCLEAR (SOLUÇÃO DEFINITIVA) ---
 st.markdown("""
     <style>
         /* Importa fonte */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
         html, body, [class*="css"] { font-family: 'Roboto', sans-serif; }
 
-        /* --- REMOVE TUDO DO STREAMLIT --- */
+        /* --- ZONA DE SUPRESSÃO TOTAL DO STREAMLIT --- */
         
-        /* 1. Remove o Header inteiro (onde fica o botão e o menu) */
-        header[data-testid="stHeader"] {
-            display: none !important;
+        /* 1. Mata o cabeçalho nativo completamente */
+        header {
             visibility: hidden !important;
+            display: none !important;
             height: 0px !important;
-            background: transparent !important;
-            z-index: -1 !important;
         }
         
-        /* 2. Remove especificamente o botão de Deploy/Gerenciar */
-        div[data-testid="stAppDeployButton"], button[data-testid="stAppDeployButton"] {
-            display: none !important;
+        /* 2. Remove especificamente a barra de ferramentas e botões de deploy */
+        [data-testid="stToolbar"], 
+        [data-testid="stAppDeployButton"], 
+        [data-testid="stDecoration"],
+        [data-testid="stHeader"] {
             visibility: hidden !important;
+            display: none !important;
+            height: 0px !important;
         }
 
-        /* 3. Remove a barra de ferramentas (Toolbar) */
-        [data-testid="stToolbar"] {
+        /* 3. Remove rodapé e menu */
+        footer, #MainMenu {
             display: none !important;
-            visibility: hidden !important;
         }
 
-        /* 4. Remove a linha colorida no topo */
-        [data-testid="stDecoration"] {
-            display: none !important;
-            visibility: hidden !important;
-        }
-
-        /* 5. Remove o rodapé e menu hamburger */
-        footer, #MainMenu, [data-testid="stStatusWidget"] {
-            display: none !important;
-            visibility: hidden !important;
-        }
-
-        /* 6. PUXA O CONTEÚDO PARA CIMA (Remove o espaço branco deixado pelo header) */
+        /* 4. AJUSTE CRÍTICO: Sobe o conteúdo para tapar o buraco do header */
         .block-container {
             padding-top: 0rem !important;
+            margin-top: -3rem !important; /* Puxa tudo para cima */
             padding-bottom: 2rem !important;
-            margin-top: -1rem !important; /* Força subida extra */
         }
         
-        /* --- ESTILOS DO SISTEMA --- */
+        /* --- ESTILOS DO SEU SISTEMA --- */
         :root {
             --primary: #00A8C6;
             --card-bg: #ffffff;
         }
 
-        /* Cards de Métricas */
-        div[data-testid="metric-container"] {
-            background-color: var(--card-bg);
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            border-left: 5px solid var(--primary);
-            text-align: center;
+        /* Login Container Compacto */
+        .login-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            border: 1px solid #eee;
+            margin-top: 50px; /* Dá um respiro agora que subimos o container */
         }
 
         /* Botões */
@@ -92,17 +81,17 @@ st.markdown("""
         }
         div.stButton > button:first-child:hover { opacity: 0.9; }
 
-        /* Login Container */
-        .login-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-            border: 1px solid #eee;
-            margin-top: 40px; /* Espaço para não colar no topo absoluto */
+        /* Cards de Métricas */
+        div[data-testid="metric-container"] {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-left: 5px solid var(--primary);
+            text-align: center;
         }
         
-        /* Profile Popup */
+        /* Popup do Perfil */
         .profile-popup-box {
             background-color: white;
             border: 1px solid #ddd;
@@ -220,14 +209,13 @@ LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3
 if 'user_info' not in st.session_state: st.session_state['user_info'] = None
 
 # ==============================================================================
-# TELA DE LOGIN (COMPACTA)
+# TELA DE LOGIN (COMPACTA E LIMPA)
 # ==============================================================================
 if not st.session_state['user_info']:
-    # [5, 3, 5] para centralizar bem
+    # Colunas [5, 3, 5] para centralizar um card PEQUENO
     col_e, col_c, col_d = st.columns([5, 3, 5])
     
     with col_c:
-        # Container do Login
         with st.container():
             st.markdown(f"""
             <div class="login-container" style="text-align:center;">
@@ -301,7 +289,7 @@ with st.container():
 
 st.divider()
 
-# --- MENU ---
+# --- MENU HORIZONTAL ---
 opts = ["Dashboard", "Pesquisar", "Cadastrar Aluno"]
 icons = ["house", "search", "person-plus"]
 if user['role'] == 'admin': opts.append("Administração"); icons.append("gear")
