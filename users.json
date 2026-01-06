@@ -1,12 +1,10 @@
 {
     "users": [
         {
-            "username": "admin",
-            "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
             "name": "Administrador Principal",
-            "email": "seuemail@exemplo.com",
-            "role": "admin",
+            "email": "admin@gmail.com",
             "status": "active",
+            "role": "admin",
             "unit": "DIRETORIA"
         },
         {
@@ -21,33 +19,33 @@
         {
             "username": "daisy",
             "password": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
-            "name": "paulo",
+            "name": "dai",
             "email": "daisyhartman436@gmail.com",
             "role": "user",
             "status": "pending",
             "unit": "PADR\u00c3O"
         },
         {
-            "username": "daisy 1",
-            "password": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
-            "name": "daisy",
-            "email": "daisyhartman436@gmail.com",
-            "role": "user",
-            "status": "pending",
-            "unit": "PADR\u00c3O"
-        },
-        {
-            "username": "day",
+            "username": "daisy",
             "password": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
-            "name": "dausy",
+            "name": "dai",
             "email": "daisyhartman436@gmail.com",
             "role": "user",
             "status": "pending",
             "unit": "PADR\u00c3O"
         },
         {
-            "username": "dayy",
-            "password": "6b51d431df5d7f141cbececcf79edf3dd861c3b4069f0b11661a3eefacbba918",
+            "username": "daisy",
+            "password": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+            "name": "dai",
+            "email": "daisyhartman436@gmail.com",
+            "role": "user",
+            "status": "pending",
+            "unit": "PADR\u00c3O"
+        },
+        {
+            "username": "daisy",
+            "password": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
             "name": "dai",
             "email": "daisyhartman436@gmail.com",
             "role": "user",
