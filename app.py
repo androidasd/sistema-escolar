@@ -209,19 +209,21 @@ if not st.session_state['user_info']:
     with col_centro:
         st.write("") # Espaço
         with st.container(border=True):
-            # Cabeçalho do Card
-            cc1, cc2 = st.columns([1, 4])
-            with cc1: st.image(LOGO_URL, width=60)
-            with cc2: st.markdown(f"<h3 style='margin:15px 0 0 0; color:{COR_TEMA}'>{NOME_ESCOLA}</h3>", unsafe_allow_html=True)
             
-            st.markdown("---")
+            # --- LOGO E TÍTULO CENTRALIZADOS ---
+            st.markdown(f"""
+                <div style="text-align: center; padding-bottom: 20px;">
+                    <img src="{LOGO_URL}" width="80" style="margin-bottom: 10px;">
+                    <h2 style="margin: 0; color: {COR_TEMA}; font-weight: 700;">{NOME_ESCOLA}</h2>
+                </div>
+            """, unsafe_allow_html=True)
             
-            # ABAS CENTRALIZADAS (Login via EMAIL)
+            # ABAS CENTRALIZADAS
             tab1, tab2 = st.tabs(["🔐 ENTRAR", "📝 CRIAR CONTA"])
             
             with tab1:
                 with st.form("login_email"):
-                    email_login = st.text_input("E-mail Cadastrado")
+                    email_login = st.text_input("E-mail")
                     senha_login = st.text_input("Senha", type="password")
                     
                     if st.form_submit_button("ACESSAR SISTEMA", use_container_width=True):
@@ -230,11 +232,11 @@ if not st.session_state['user_info']:
                             s_mestra = st.secrets["SENHA_SISTEMA"]
                         except: s_mestra = "admin"
                         
-                        # Login de Admin Mestre (Email fixo ou qualquer um com a senha mestra)
-                        if email_login.lower() == "admin" and senha_login == s_mestra:
+                        # LOGIN DE ADMIN (E-MAIL FIXO)
+                        if email_login.lower() == "admin@escola.com" and senha_login == s_mestra:
                              st.session_state['user_info'] = {
                                  "username": "Super Admin", "name": "Administrador Geral", 
-                                 "role": "admin", "email": "admin@sistema", "unit": "DIRETORIA"
+                                 "role": "admin", "email": "admin@escola.com", "unit": "DIRETORIA"
                              }
                              st.rerun()
                         
@@ -256,7 +258,7 @@ if not st.session_state['user_info']:
                 with st.form("registro"):
                     st.caption("Preencha para solicitar acesso:")
                     nome_reg = st.text_input("Nome Completo")
-                    email_reg = st.text_input("E-mail (Será seu Login)")
+                    email_reg = st.text_input("E-mail Pessoal")
                     senha_reg = st.text_input("Crie uma Senha", type="password")
                     
                     if st.form_submit_button("SOLICITAR CADASTRO", use_container_width=True):
@@ -271,9 +273,9 @@ if not st.session_state['user_info']:
                                 st.error("⚠️ Este e-mail já possui cadastro.")
                             else:
                                 with st.spinner("Enviando solicitação..."):
-                                    # Cria novo usuário (usa email como ID e username para compatibilidade)
+                                    # Cria novo usuário
                                     novo_user = {
-                                        "username": email_reg.split("@")[0], # Gera um user interno
+                                        "username": email_reg.split("@")[0],
                                         "password": hash_senha(senha_reg),
                                         "name": nome_reg,
                                         "email": email_reg,
@@ -337,13 +339,13 @@ if menu == "Administração":
     
     tab_u, tab_p, tab_c = st.tabs(["👥 Gestão de Usuários", "🔑 Alterar Senhas", "🎨 Aparência"])
     
-    # TAB 1: GESTÃO (STATUS E PERMISSÕES)
+    # TAB 1: GESTÃO
     with tab_u:
         db, sha = carregar_json(ARQ_USERS)
         users_list = db.get("users", [])
         
         if users_list:
-            # Métricas no topo
+            # Métricas
             col_m1, col_m2 = st.columns(2)
             total_users = len(users_list)
             pending_users = len([u for u in users_list if u.get('status') == 'pending'])
@@ -353,12 +355,8 @@ if menu == "Administração":
             
             st.markdown("### Tabela de Usuários")
             
-            # Editor de Dados
             df_users = pd.DataFrame(users_list)
-            # Esconde colunas sensíveis ou técnicas
             cols_to_show = ["name", "email", "status", "role", "unit"]
-            
-            # Garante que as colunas existem antes de filtrar
             df_display = df_users[[c for c in cols_to_show if c in df_users.columns]]
             
             edited = st.data_editor(
@@ -368,34 +366,29 @@ if menu == "Administração":
                 column_config={
                     "name": "Nome",
                     "email": "E-mail (Login)",
-                    "status": st.column_config.SelectboxColumn("Status", options=["active", "pending", "disabled"], help="Active=Liberado"),
+                    "status": st.column_config.SelectboxColumn("Status", options=["active", "pending", "disabled"]),
                     "role": st.column_config.SelectboxColumn("Nível", options=["user", "admin"]),
                     "unit": "Unidade"
                 }
             )
             
             if st.button("💾 Salvar Alterações de Status/Permissão"):
-                # Atualiza a lista original com as edições (mesclando dados)
-                # Lógica: O data_editor retorna um DF. Convertemos para dict e atualizamos o JSON principal mantendo as senhas originais
                 novos_dados = edited.to_dict('records')
-                
-                # Reconstrói a lista completa preservando senhas e usernames antigos
                 lista_atualizada = []
                 for novo in novos_dados:
-                    # Encontra o original pelo email
                     original = next((u for u in users_list if u.get('email') == novo['email']), None)
                     if original:
-                        original.update(novo) # Atualiza campos editados
+                        original.update(novo)
                         lista_atualizada.append(original)
                     else:
-                        lista_atualizada.append(novo) # Caso raro de novo
+                        lista_atualizada.append(novo)
                 
                 db['users'] = lista_atualizada
                 salvar_json(ARQ_USERS, db, sha, "Admin atualizou usuários")
                 st.success("✅ Banco de dados atualizado com sucesso!")
                 time.sleep(1.5); st.rerun()
 
-    # TAB 2: ALTERAR SENHAS (NOVO)
+    # TAB 2: ALTERAR SENHAS
     with tab_p:
         st.markdown("### 🔐 Redefinir Senha de Usuário")
         st.warning("Use esta área para trocar a senha de um usuário que esqueceu.")
@@ -403,7 +396,6 @@ if menu == "Administração":
         db, sha = carregar_json(ARQ_USERS)
         users_list = db.get("users", [])
         
-        # Selectbox com E-mails
         emails = [u.get('email') for u in users_list]
         user_selecionado = st.selectbox("Selecione o Usuário para alterar a senha:", [""] + emails)
         
@@ -413,12 +405,10 @@ if menu == "Administração":
             
             if st.button("Confirmar Alteração de Senha"):
                 if nova_senha_admin and nova_senha_admin == confirmar_senha:
-                    # Atualiza no JSON
                     for u in users_list:
                         if u.get('email') == user_selecionado:
                             u['password'] = hash_senha(nova_senha_admin)
                             break
-                    
                     db['users'] = users_list
                     if salvar_json(ARQ_USERS, db, sha, f"Admin alterou senha de {user_selecionado}"):
                         st.success(f"✅ Senha de {user_selecionado} alterada com sucesso!")
