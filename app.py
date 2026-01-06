@@ -239,8 +239,8 @@ if not st.session_state['user_info']:
                         try: s_adm = st.secrets["SENHA_SISTEMA"]
                         except: s_adm = "admin"
                         
-                        if email.lower() == "admin@escola.com" and senha == s_adm:
-                            st.session_state['user_info'] = {"username": "Admin", "name": "Super Administrador", "role": "admin", "email": "admin@escola.com", "unit": "Diretoria"}
+                        if email.lower() == "admin@emeifparessaca.com" and senha == s_adm:
+                            st.session_state['user_info'] = {"username": "Admin", "name": "Super Administrador", "role": "admin", "email": "admin@emeifparessaca.com", "unit": "Diretoria"}
                             st.rerun()
                             
                         db, _ = carregar_json(ARQ_USERS)
@@ -466,3 +466,4 @@ elif selected == "Administração":
                 salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, s_c, "Upd Config")
                 st.toast("Configurações salvas. Atualizando...")
                 time.sleep(2); st.rerun()
+
