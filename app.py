@@ -61,28 +61,30 @@ try:
     g = Github(TOKEN)
     user = g.get_user()
     repo_ref = None
+    # Tenta encontrar o repositório automaticamente
     for repo in user.get_repos():
         if "sistema" in repo.name.lower() or "escolar" in repo.name.lower() or "emeif" in repo.name.lower():
             repo_ref = repo
             break
+    # Se não achar pelo nome, pega o primeiro da lista (fallback)
     if not repo_ref: 
         repos = list(user.get_repos())
         if repos: repo_ref = repos[0]
             
     if not repo_ref:
-        st.error("Erro: Repositório não encontrado.")
+        st.error("Erro Crítico: Repositório não encontrado no GitHub.")
         st.stop()
 except Exception as e:
-    st.error(f"Erro de conexão: {e}")
+    st.error(f"Erro de conexão com GitHub: {e}")
     st.stop()
 
-# --- ARQUIVOS ---
+# --- ARQUIVOS NO GITHUB ---
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
 ARQ_CONCLUINTES = 'CONCLUINTES- PA-RESSACA.docx'
 ARQ_USERS = 'users.json'
 ARQ_CONFIG = 'config.json'
 
-# --- FUNÇÕES DE ARQUIVOS (JSON e WORD) ---
+# --- FUNÇÕES DE MANIPULAÇÃO DE DADOS ---
 
 def carregar_json(arquivo):
     try:
@@ -141,7 +143,7 @@ def salvar_aluno_word(arquivo_nome, numero, nome, obs):
             return True
     except: return False
 
-# --- CONFIGURAÇÃO VISUAL ---
+# --- CONFIGURAÇÃO VISUAL DO TEMA ---
 config_data, config_sha = carregar_json(ARQ_CONFIG)
 COR_TEMA = config_data.get("theme_color", "#00A8C6")
 NOME_ESCOLA = config_data.get("school_name", "SISTEMA ESCOLAR")
@@ -149,10 +151,12 @@ LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3
 
 st.set_page_config(page_title=NOME_ESCOLA, page_icon="🎓", layout="wide")
 
+# CSS CSS PERSONALIZADO
 st.markdown(f"""
 <style>
     :root {{ --primary-color: {COR_TEMA}; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}}
+    
     .profile-container {{
         padding: 10px; border-bottom: 2px solid {COR_TEMA};
         margin-bottom: 20px; background: white; border-radius: 8px; cursor: pointer;
@@ -163,11 +167,12 @@ st.markdown(f"""
         box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 999;
     }}
     .profile-container:hover .profile-popup {{ display: block; }}
+    
     div.stButton > button:first-child {{ background-color: {COR_TEMA}; color: white; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- LOGIN ---
+# --- TELA DE LOGIN ---
 if 'user_info' not in st.session_state: st.session_state['user_info'] = None
 
 if not st.session_state['user_info']:
@@ -179,9 +184,25 @@ if not st.session_state['user_info']:
             u = st.text_input("Usuário")
             s = st.text_input("Senha", type="password")
             if st.form_submit_button("ENTRAR"):
+                # Primeiro verifica se é a senha Mestra (Admin Geral)
+                try:
+                    senha_sistema = st.secrets["SENHA_SISTEMA"]
+                except:
+                    senha_sistema = "admin" # Fallback
+                
+                if u == "admin" and s == senha_sistema:
+                     # Cria um usuário Admin temporário na sessão se usar a senha mestra
+                     st.session_state['user_info'] = {
+                         "username": "admin", "name": "Super Admin", 
+                         "role": "admin", "email": "admin@sistema", "unit": "DIRETORIA"
+                     }
+                     st.rerun()
+                
+                # Se não for senha mestra, busca no banco JSON
                 db, _ = carregar_json(ARQ_USERS)
                 users = db.get("users", [])
                 found = next((x for x in users if x['username'] == u and x['password'] == hash_senha(s)), None)
+                
                 if found:
                     if found.get('status') == 'active':
                         st.session_state['user_info'] = found
@@ -191,14 +212,19 @@ if not st.session_state['user_info']:
                 
     with tab2:
         with st.form("reg"):
-            nn = st.text_input("Nome"); ne = st.text_input("Email"); nu = st.text_input("Usuário"); ns = st.text_input("Senha", type="password")
+            st.write("Preencha para criar seu login:")
+            nn = st.text_input("Nome Completo")
+            ne = st.text_input("E-mail (para confirmação)")
+            nu = st.text_input("Usuário (Login)")
+            ns = st.text_input("Senha", type="password")
+            
             if st.form_submit_button("CADASTRAR"):
                 db, sha = carregar_json(ARQ_USERS)
                 lst = db.get("users", [])
                 if any(x['username'] == nu for x in lst): st.error("Usuário já existe.")
                 else:
                     with st.spinner("Registrando e enviando e-mail..."):
-                        # Salva no Banco
+                        # Salva no Banco JSON
                         lst.append({"username": nu, "password": hash_senha(ns), "name": nn, "email": ne, "role": "user", "status": "pending", "unit": "PADRÃO"})
                         if not db: db = {"users": []}
                         db['users'] = lst
@@ -210,14 +236,15 @@ if not st.session_state['user_info']:
                         if enviou:
                             st.success(f"✅ Sucesso! Um e-mail foi enviado para {ne}.")
                         else:
-                            st.warning("✅ Cadastro salvo, mas houve erro ao enviar o e-mail (verifique os Secrets).")
+                            st.warning("✅ Cadastro salvo, mas houve erro ao enviar o e-mail (verifique se a Senha de App está correta nos Secrets).")
     st.stop()
 
-# --- SISTEMA LOGADO ---
+# --- SISTEMA LOGADO (DASHBOARD) ---
 user = st.session_state['user_info']
 
 with st.sidebar:
     st.image(LOGO_URL, width=80)
+    # Card de Perfil
     st.markdown(f"""
     <div class="profile-container">
         👤 <strong>{user['username']}</strong>
@@ -237,31 +264,42 @@ with st.sidebar:
     menu = option_menu("Menu", opts, icons=icons, default_index=0)
     if st.button("Sair"): st.session_state['user_info'] = None; st.rerun()
 
-# --- CARREGAR DADOS ---
+# --- CARREGAR DADOS DOS ALUNOS ---
 if menu in ["Dashboard", "Pesquisar"]:
     df = pd.DataFrame(carregar_dados_word())
 
-# --- TELAS ---
+# --- TELAS DO SISTEMA ---
 if menu == "Administração":
-    st.title("⚙️ Admin")
-    tab_u, tab_c = st.tabs(["👥 Usuários", "🎨 Config"])
+    st.title("⚙️ Painel Admin")
+    tab_u, tab_c = st.tabs(["👥 Usuários", "🎨 Aparência"])
     with tab_u:
         db, sha = carregar_json(ARQ_USERS)
         if db.get("users"):
-            edited = st.data_editor(pd.DataFrame(db['users']), key="user_edit", num_rows="dynamic")
-            if st.button("Salvar Usuários"):
+            edited = st.data_editor(
+                pd.DataFrame(db['users']), 
+                key="user_edit", 
+                num_rows="dynamic",
+                column_config={
+                    "status": st.column_config.SelectboxColumn("Status", options=["active", "pending", "disabled"]),
+                    "role": st.column_config.SelectboxColumn("Permissão", options=["user", "admin"])
+                }
+            )
+            if st.button("Salvar Alterações de Usuários"):
                 db['users'] = edited.to_dict('records')
                 salvar_json(ARQ_USERS, db, sha, "Update users")
-                st.success("Salvo!"); time.sleep(1); st.rerun()
+                st.success("Usuários atualizados!"); time.sleep(1); st.rerun()
+        else:
+            st.info("Nenhum usuário cadastrado.")
+            
     with tab_c:
         with st.form("conf"):
             cn = st.text_input("Nome Escola", NOME_ESCOLA)
-            cc = st.color_picker("Cor", COR_TEMA)
-            cl = st.text_input("Logo URL", LOGO_URL)
-            if st.form_submit_button("Salvar Config"):
+            cc = st.color_picker("Cor do Tema", COR_TEMA)
+            cl = st.text_input("URL da Logo", LOGO_URL)
+            if st.form_submit_button("Salvar Configuração"):
                 _, s_c = carregar_json(ARQ_CONFIG)
                 salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, s_c, "Update config")
-                st.success("Atualizado!"); time.sleep(2); st.rerun()
+                st.success("Tema atualizado!"); time.sleep(2); st.rerun()
 
 elif menu == "Dashboard":
     st.title("📊 Visão Geral")
@@ -269,7 +307,10 @@ elif menu == "Dashboard":
         c1, c2 = st.columns(2)
         c1.metric("Total Alunos", len(df))
         c2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"]))
+        st.subheader("Últimos Registros")
         st.dataframe(df.tail(5), use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhum dado encontrado nos arquivos Word.")
 
 elif menu == "Pesquisar":
     st.title("🔍 Buscar Aluno")
@@ -277,10 +318,10 @@ elif menu == "Pesquisar":
     if busca and not df.empty:
         res = df[df['Nome'].str.contains(busca.upper(), na=False)]
         if not res.empty:
-            st.success(f"{len(res)} encontrados.")
+            st.success(f"{len(res)} alunos encontrados.")
             st.dataframe(res, use_container_width=True, hide_index=True)
-        else: st.warning("Nada encontrado.")
-    else: st.info("Digite para pesquisar.")
+        else: st.warning("Nenhum aluno encontrado com esse nome.")
+    else: st.info("Digite um nome acima para iniciar a pesquisa.")
 
 elif menu == "Cadastrar Aluno":
     st.title("📝 Nova Matrícula")
@@ -288,15 +329,15 @@ elif menu == "Cadastrar Aluno":
         c1, c2 = st.columns([1,4])
         num = c1.text_input("Nº (Ex: 050)")
         nome = c2.text_input("Nome Completo")
-        tipo = st.radio("Destino", ["Passivos", "Concluintes"])
+        tipo = st.radio("Arquivo de Destino", ["Passivos", "Concluintes"])
         obs = st.text_input("Observação")
         
-        if st.form_submit_button("💾 SALVAR"):
+        if st.form_submit_button("💾 SALVAR ALUNO"):
             arq = ARQ_PASSIVOS if tipo == "Passivos" else ARQ_CONCLUINTES
             if not num: num = "S/N"
             if salvar_aluno_word(arq, num, nome, obs):
-                st.success(f"Aluno {nome} salvo com sucesso!")
+                st.success(f"Aluno {nome} salvo com sucesso no arquivo Word!")
                 time.sleep(1)
                 st.cache_data.clear()
                 st.rerun()
-            else: st.error("Erro ao salvar.")
+            else: st.error("Erro ao salvar no GitHub.")
