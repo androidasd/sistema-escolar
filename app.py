@@ -11,13 +11,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from streamlit_option_menu import option_menu
 
-# --- CONFIGURAÇÃO DA PÁGINA (PRIMEIRA LINHA) ---
+# --- CONFIGURAÇÃO DA PÁGINA (PRIMEIRA LINHA OBRIGATÓRIA) ---
 ST_COR_PADRAO = "#00A8C6"
 ST_TITULO_PADRAO = "SISTEMA ESCOLAR"
 
 st.set_page_config(page_title=ST_TITULO_PADRAO, page_icon="🎓", layout="wide")
 
-# --- CSS NUCLEAR (SOLUÇÃO DEFINITIVA) ---
+# --- CSS NUCLEAR (A SOLUÇÃO DEFINITIVA) ---
 st.markdown("""
     <style>
         /* Importa fonte */
@@ -26,11 +26,13 @@ st.markdown("""
 
         /* --- ZONA DE SUPRESSÃO TOTAL DO STREAMLIT --- */
         
-        /* 1. Mata o cabeçalho nativo completamente */
+        /* 1. Mata o cabeçalho nativo completamente e remove o espaço dele */
         header {
             visibility: hidden !important;
             display: none !important;
             height: 0px !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
         }
         
         /* 2. Remove especificamente a barra de ferramentas e botões de deploy */
@@ -46,12 +48,18 @@ st.markdown("""
         /* 3. Remove rodapé e menu */
         footer, #MainMenu {
             display: none !important;
+            visibility: hidden !important;
+        }
+        
+        /* 4. Remove o badge "Viewer" que as vezes aparece embaixo */
+        .viewerBadge_container__1QSob {
+            display: none !important;
         }
 
-        /* 4. AJUSTE CRÍTICO: Sobe o conteúdo para tapar o buraco do header */
+        /* 5. AJUSTE CRÍTICO: Sobe o conteúdo para tapar o buraco do header */
         .block-container {
             padding-top: 0rem !important;
-            margin-top: -3rem !important; /* Puxa tudo para cima */
+            margin-top: -4rem !important; /* Puxa tudo para cima agressivamente */
             padding-bottom: 2rem !important;
         }
         
@@ -68,7 +76,7 @@ st.markdown("""
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.08);
             border: 1px solid #eee;
-            margin-top: 50px; /* Dá um respiro agora que subimos o container */
+            margin-top: 60px; /* Dá um respiro agora que subimos o container */
         }
 
         /* Botões */
@@ -209,10 +217,10 @@ LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3
 if 'user_info' not in st.session_state: st.session_state['user_info'] = None
 
 # ==============================================================================
-# TELA DE LOGIN (COMPACTA E LIMPA)
+# TELA DE LOGIN (SUPER COMPACTA)
 # ==============================================================================
 if not st.session_state['user_info']:
-    # Colunas [5, 3, 5] para centralizar um card PEQUENO
+    # AJUSTE: [5, 3, 5] -> A coluna do meio (3) é a única com conteúdo
     col_e, col_c, col_d = st.columns([5, 3, 5])
     
     with col_c:
@@ -235,9 +243,11 @@ if not st.session_state['user_info']:
                     if st.form_submit_button("ACESSAR", use_container_width=True):
                         try: s_adm = st.secrets["SENHA_SISTEMA"]
                         except: s_adm = "admin"
+                        # ADMIN: admin@gmail.com
                         if email.lower() == "admin@emeifparessaca.com" and senha == s_adm:
                             st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@emeifparessaca.com", "unit": "DIRETORIA"}
                             st.rerun()
+                        # USUARIOS NORMAIS
                         db, _ = carregar_json(ARQ_USERS)
                         u = next((x for x in db.get("users", []) if x.get('email', '').lower() == email.lower() and x['password'] == hash_senha(senha)), None)
                         if u:
