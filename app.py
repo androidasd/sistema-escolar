@@ -7,63 +7,65 @@ import io
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Secretaria Escolar", page_icon="🏫", layout="wide")
 
-# --- CONEXÃO COM GITHUB (SEGURANÇA) ---
-# Pega a chave que você salvou nos "Secrets" do site
+# --- CONEXÃO COM GITHUB ---
 try:
+    # Pega a chave que você salvou no site do Streamlit
     TOKEN = st.secrets["GITHUB_TOKEN"]
     g = Github(TOKEN)
-    # Substitua pelo SEU usuário e nome do repositório ex: "joao/sistema-escolar"
-    # O sistema tenta achar automático, mas se der erro, coloque manual
-    repo_name = "seu-usuario/sistema-escolar" # <--- ATENÇÃO: O SITE VAI TENTAR DESCOBRIR SOZINHO, MAS SE DER ERRO ALTERE AQUI
     
-    # Tenta descobrir o repositório atual automaticamente
+    # Tenta achar o seu repositório automaticamente
     user = g.get_user()
+    repo_ref = None
+    # Procura o repositório chamado 'sistema-escolar'
     for repo in user.get_repos():
-        if repo.name == "sistema-escolar":
+        if "sistema-escolar" in repo.name:
             repo_ref = repo
             break
-except:
-    st.error("ERRO: Configure o 'GITHUB_TOKEN' nas configurações (Secrets) do Streamlit.")
+            
+    if not repo_ref:
+        st.error("Erro: Não encontrei o repositório 'sistema-escolar' no seu GitHub.")
+        st.stop()
+
+except Exception as e:
+    st.error(f"Erro de Conexão: Verifique se configurou o Secrets corretamente. Detalhe: {e}")
     st.stop()
 
+# Nomes exatos dos seus arquivos
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
 ARQ_CONCLUINTES = 'CONCLUINTES- PA-RESSACA.docx'
 
-# --- FUNÇÕES DE BANCO DE DADOS ---
+# --- FUNÇÕES ---
 
-def carregar_dados_github(nome_arquivo):
-    """Baixa o arquivo Word direto do GitHub para ler"""
+def carregar_do_github(nome_arquivo):
+    """Baixa o arquivo Word do GitHub para a memória"""
     try:
         contents = repo_ref.get_contents(nome_arquivo)
-        # Cria um arquivo temporário na memória
-        arquivo_memoria = io.BytesIO(contents.decoded_content)
-        return Document(arquivo_memoria), contents.sha
-    except Exception as e:
-        st.error(f"Erro ao ler {nome_arquivo}: {e}")
+        return Document(io.BytesIO(contents.decoded_content)), contents.sha
+    except:
         return None, None
 
-def salvar_no_github(nome_arquivo, documento_docx, sha_original, mensagem):
-    """Envia o arquivo modificado de volta para o GitHub"""
+def salvar_no_github(nome_arquivo, doc, sha_original, aluno_nome):
+    """Salva o arquivo alterado de volta no GitHub"""
     try:
-        # Salva o documento modificado em memória
-        arquivo_salvar = io.BytesIO()
-        documento_docx.save(arquivo_salvar)
-        novo_conteudo = arquivo_salvar.getvalue()
+        # Salva o Word na memória
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        novo_conteudo = buffer.getvalue()
         
-        # Envia para o GitHub (Atualiza o arquivo)
+        # Envia para o GitHub
         repo_ref.update_file(
             path=nome_arquivo,
-            message=mensagem,
+            message=f"Novo aluno cadastrado: {aluno_nome}",
             content=novo_conteudo,
             sha=sha_original
         )
-        st.toast("✅ Salvo no GitHub com sucesso!", icon="☁️")
         return True
     except Exception as e:
         st.error(f"Erro ao salvar: {e}")
         return False
 
-def ler_tabela_formatada(doc, tipo):
+def ler_tabela(doc, tipo):
+    """Lê os dados para mostrar na pesquisa"""
     lista = []
     if doc:
         for tabela in doc.tables:
@@ -75,60 +77,68 @@ def ler_tabela_formatada(doc, tipo):
                         lista.append({"Nome": nome, "Situação": tipo, "Obs": obs})
     return lista
 
-# --- INTERFACE DO SISTEMA ---
-st.title("🏫 Sistema Escolar Online (Com Salvamento Automático)")
+# --- TELA DO SISTEMA ---
 
-tab1, tab2 = st.tabs(["🔍 Pesquisar", "📝 Cadastrar Novo Aluno"])
+st.title("🏫 Sistema Escolar Online")
 
-# --- ABA 1: PESQUISAR ---
+# Cria as duas abas
+tab1, tab2 = st.tabs(["🔍 PESQUISAR ALUNO", "📝 CADASTRAR NOVO"])
+
+# --- ABA 1: PESQUISA ---
 with tab1:
-    # Carrega os arquivos do GitHub na hora
-    doc_passivos, sha_p = carregar_dados_github(ARQ_PASSIVOS)
-    doc_concluintes, sha_c = carregar_dados_github(ARQ_CONCLUINTES)
+    st.write("Digite o nome abaixo para buscar nos arquivos:")
+    busca = st.text_input("Nome do Aluno:", placeholder="Ex: Ana...")
     
-    lista_final = ler_tabela_formatada(doc_passivos, "Passivo") + ler_tabela_formatada(doc_concluintes, "Concluinte")
-    df = pd.DataFrame(lista_final)
+    if busca:
+        with st.spinner("Buscando no arquivo..."):
+            doc_p, _ = carregar_do_github(ARQ_PASSIVOS)
+            doc_c, _ = carregar_do_github(ARQ_CONCLUINTES)
+            
+            dados = ler_tabela(doc_p, "Passivo") + ler_tabela(doc_c, "Concluinte")
+            df = pd.DataFrame(dados)
+            
+            if not df.empty:
+                res = df[df['Nome'].str.contains(busca, case=False, na=False)]
+                if not res.empty:
+                    st.success(f"{len(res)} alunos encontrados!")
+                    st.dataframe(res, use_container_width=True)
+                else:
+                    st.warning("Nenhum aluno encontrado.")
 
-    busca = st.text_input("Buscar Aluno:", placeholder="Digite o nome...")
-    if busca and not df.empty:
-        res = df[df['Nome'].str.contains(busca, case=False, na=False)]
-        st.dataframe(res, use_container_width=True)
-
-# --- ABA 2: CADASTRAR (A MÁGICA) ---
+# --- ABA 2: CADASTRO (SALVA AUTOMÁTICO) ---
 with tab2:
-    st.header("Cadastrar Novo Aluno")
+    st.markdown("### Cadastrar Novo Aluno")
+    st.info("ℹ️ Ao clicar em salvar, o sistema edita o Word e atualiza seu GitHub automaticamente.")
     
-    with st.form("form_cadastro"):
-        novo_nome = st.text_input("Nome Completo")
-        nova_obs = st.text_input("Observação")
-        arquivo_destino = st.radio("Onde salvar?", ["EMEF PA-RESSACA (Passivos)", "CONCLUINTES"])
+    with st.form("cadastro"):
+        nome_novo = st.text_input("Nome Completo:")
+        obs_nova = st.text_input("Observação:")
+        destino = st.radio("Onde salvar?", ["EMEF PA-RESSACA (Passivos)", "CONCLUINTES"])
         
-        enviar = st.form_submit_button("💾 SALVAR NO SISTEMA")
+        btn_salvar = st.form_submit_button("💾 SALVAR CADASTRO")
         
-        if enviar and novo_nome:
-            with st.spinner("Salvando na nuvem..."):
-                # Define qual arquivo abrir
-                if "CONCLUINTES" in arquivo_destino:
-                    nome_arq = ARQ_CONCLUINTES
-                    doc_atual, sha_atual = doc_concluintes, sha_c
-                else:
-                    nome_arq = ARQ_PASSIVOS
-                    doc_atual, sha_atual = doc_passivos, sha_p
+        if btn_salvar and nome_novo:
+            with st.spinner("Conectando ao GitHub e salvando..."):
+                # Escolhe o arquivo certo
+                arquivo_alvo = ARQ_CONCLUINTES if "CONCLUINTES" in destino else ARQ_PASSIVOS
+                doc_atual, sha_atual = carregar_do_github(arquivo_alvo)
                 
-                # Adiciona na primeira tabela que achar (ou na última)
-                if len(doc_atual.tables) > 0:
-                    tabela = doc_atual.tables[0] # Pega a primeira tabela
-                    nova_linha = tabela.add_row()
-                    nova_linha.cells[0].text = "NOVO" # Numero
-                    nova_linha.cells[1].text = novo_nome # Nome
-                    if len(nova_linha.cells) > 2:
-                        nova_linha.cells[2].text = nova_obs # Obs
-                    
-                    # Salva de volta no GitHub
-                    sucesso = salvar_no_github(nome_arq, doc_atual, sha_atual, f"Adicionado aluno: {novo_nome}")
-                    
-                    if sucesso:
-                        st.success(f"Aluno {novo_nome} cadastrado com sucesso! Pode pesquisar.")
-                        st.rerun() # Atualiza a página
+                if doc_atual:
+                    # Adiciona na primeira tabela
+                    if len(doc_atual.tables) > 0:
+                        tabela = doc_atual.tables[0]
+                        nova_linha = tabela.add_row()
+                        nova_linha.cells[0].text = "NOVO"
+                        nova_linha.cells[1].text = nome_novo
+                        if len(nova_linha.cells) > 2:
+                            nova_linha.cells[2].text = obs_nova
+                        
+                        # Salva
+                        if salvar_no_github(arquivo_alvo, doc_atual, sha_atual, nome_novo):
+                            st.toast("✅ Salvo com sucesso!", icon="🎉")
+                            st.success(f"Aluno '{nome_novo}' salvo no arquivo {arquivo_alvo}!")
+                            st.balloons()
+                    else:
+                        st.error("O arquivo Word não tem tabela para escrever.")
                 else:
-                    st.error("O arquivo Word não tem tabelas para adicionar.")
+                    st.error("Erro ao carregar arquivo do GitHub.")
