@@ -23,7 +23,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Tenta importar bibliotecas extras
+# Tenta importar bibliotecas visuais
 try:
     import plotly.express as px
     from streamlit_option_menu import option_menu
@@ -37,7 +37,7 @@ try:
     g = Github(TOKEN)
     user = g.get_user()
     
-    # LÓGICA INTELIGENTE
+    # LÓGICA PARA ACHAR O REPOSITÓRIO
     repo_ref = None
     for repo in user.get_repos():
         if "sistema" in repo.name.lower() or "escolar" in repo.name.lower() or "emeif" in repo.name.lower():
@@ -64,7 +64,7 @@ ARQ_CONCLUINTES = 'CONCLUINTES- PA-RESSACA.docx'
 
 @st.cache_data(ttl=60)
 def carregar_dados_simples():
-    """Lê os arquivos Word"""
+    """Lê os arquivos Word incluindo a NUMERAÇÃO"""
     def ler_arquivo(nome_arq, categoria):
         local = []
         try:
@@ -75,10 +75,19 @@ def carregar_dados_simples():
             for tabela in doc.tables:
                 for linha in tabela.rows:
                     if len(linha.cells) >= 2:
+                        # AGORA LÊ A COLUNA 0 (ONDE FICA O NÚMERO)
+                        numero = linha.cells[0].text.strip()
                         nome = linha.cells[1].text.strip().upper()
                         obs = linha.cells[2].text.strip() if len(linha.cells) > 2 else ""
+                        
+                        # Filtra cabeçalhos
                         if len(nome) > 3 and "NOME" not in nome:
-                            local.append({"Nome": nome, "Categoria": categoria, "Obs": obs})
+                            local.append({
+                                "Numero": numero, # Nova coluna
+                                "Nome": nome, 
+                                "Categoria": categoria, 
+                                "Obs": obs
+                            })
             return local, sha
         except:
             return [], None
@@ -88,7 +97,7 @@ def carregar_dados_simples():
     
     return l_p + l_c, sha_p, sha_c
 
-def salvar_github(arquivo, nome, obs):
+def salvar_github(arquivo, numero_novo, nome, obs):
     try:
         conteudo = repo_ref.get_contents(arquivo)
         doc = Document(io.BytesIO(conteudo.decoded_content))
@@ -96,7 +105,9 @@ def salvar_github(arquivo, nome, obs):
         if len(doc.tables) > 0:
             tab = doc.tables[0]
             row = tab.add_row()
-            row.cells[0].text = "NOVO"
+            
+            # Escreve o número que você digitou
+            row.cells[0].text = numero_novo 
             row.cells[1].text = nome.upper()
             if len(row.cells) > 2:
                 row.cells[2].text = obs
@@ -149,29 +160,33 @@ if escolha == "Dashboard":
                 fig = px.pie(df, names='Categoria', hole=0.4)
                 st.plotly_chart(fig, use_container_width=True)
             with col_b:
-                st.subheader("Últimos")
-                st.dataframe(df.tail(5), hide_index=True)
+                st.subheader("Últimos Cadastros")
+                if "Numero" in df.columns:
+                    st.dataframe(df.tail(5)[['Numero', 'Nome']], hide_index=True)
+                else:
+                    st.dataframe(df.tail(5), hide_index=True)
         else:
             st.dataframe(df.tail(10), use_container_width=True)
 
 if escolha == "Pesquisar":
     st.title("🔍 Buscar Aluno")
     
-    # CORREÇÃO AQUI: Só mostra a tabela SE digitar algo
-    busca = st.text_input("Digite o nome do aluno para ver o resultado:", placeholder="Ex: Ana Clara...")
+    busca = st.text_input("Digite o nome do aluno:", placeholder="Ex: Maria...")
     
     if busca:
         if not df.empty:
-            # Filtra pelo nome digitado
             df_show = df[df['Nome'].str.contains(busca.upper(), na=False)]
             
             if not df_show.empty:
-                st.success(f"{len(df_show)} aluno(s) encontrado(s).")
+                st.success(f"{len(df_show)} registros encontrados.")
+                
+                # MOSTRA A TABELA COM O NÚMERO
                 st.dataframe(
                     df_show, 
                     use_container_width=True, 
                     height=500,
                     column_config={
+                        "Numero": st.column_config.TextColumn("Nº", width="small"),
                         "Nome": st.column_config.TextColumn("Nome Completo"),
                         "Categoria": st.column_config.TextColumn("Status"),
                         "Obs": st.column_config.TextColumn("Observações"),
@@ -179,22 +194,33 @@ if escolha == "Pesquisar":
                     hide_index=True
                 )
             else:
-                st.warning("Nenhum aluno encontrado com esse nome.")
+                st.warning("Nenhum aluno encontrado.")
     else:
-        st.info("👆 Digite um nome na caixa acima para começar a pesquisa.")
+        st.info("👆 Digite um nome acima para pesquisar.")
 
 if escolha == "Cadastrar":
     st.title("📝 Nova Matrícula")
+    st.info("Preencha os dados abaixo. O número deve seguir a sequência do seu documento.")
+    
     with st.form("novo"):
-        nome = st.text_input("Nome:")
-        tipo = st.radio("Lista:", ["Concluintes", "Passivos"])
-        obs = st.text_input("Obs:")
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            # CAMPO NOVO PARA DIGITAR O NÚMERO
+            num_novo = st.text_input("Nº (Ex: 018)", placeholder="000")
+        with col2:
+            nome = st.text_input("Nome Completo:")
+            
+        tipo = st.radio("Lista de Destino:", ["Concluintes", "Passivos"])
+        obs = st.text_input("Observação (Opcional):")
         
-        if st.form_submit_button("💾 Salvar"):
+        if st.form_submit_button("💾 Salvar Aluno"):
+            if not num_novo: 
+                num_novo = "S/N" # Se deixar vazio, salva S/N
+                
             arq = ARQ_CONCLUINTES if tipo == "Concluintes" else ARQ_PASSIVOS
-            with st.spinner("Salvando..."):
-                if salvar_github(arq, nome, obs):
-                    st.success("Salvo com sucesso!")
+            with st.spinner("Salvando no Word..."):
+                if salvar_github(arq, num_novo, nome, obs):
+                    st.success(f"Aluno {nome} (Nº {num_novo}) salvo com sucesso!")
                     time.sleep(1)
                     st.cache_data.clear()
                     st.rerun()
