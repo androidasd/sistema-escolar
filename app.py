@@ -6,10 +6,54 @@ import io
 import time
 import json
 import hashlib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-# --- FUNÇÕES DE SEGURANÇA ---
+# --- FUNÇÕES DE SEGURANÇA E EMAIL ---
+
 def hash_senha(senha):
     return hashlib.sha256(str.encode(senha)).hexdigest()
+
+def enviar_email_boas_vindas(destinatario, nome_usuario):
+    """Envia o e-mail automático usando o Gmail"""
+    try:
+        # Pega os dados dos Secrets
+        remetente = st.secrets["EMAIL_USER"]
+        senha_app = st.secrets["EMAIL_PASSWORD"]
+        
+        # Cria a mensagem
+        msg = MIMEMultipart()
+        msg['From'] = remetente
+        msg['To'] = destinatario
+        msg['Subject'] = "Cadastro Recebido - Sistema Escolar"
+        
+        texto = f"""
+        Olá!
+        
+        Recebemos sua solicitação de cadastro no Sistema Escolar.
+        
+        Usuário: {nome_usuario}
+        Situação: PENDENTE DE APROVAÇÃO
+        
+        Por favor, aguarde. Assim que o administrador confirmar seus dados, 
+        você receberá acesso total ao sistema.
+        
+        Atenciosamente,
+        Administração Escolar
+        """
+        msg.attach(MIMEText(texto, 'plain'))
+        
+        # Conecta no Gmail e envia
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(remetente, senha_app)
+        server.sendmail(remetente, destinatario, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Erro ao enviar e-mail: {e}")
+        return False
 
 # --- CONEXÃO GITHUB ---
 try:
@@ -60,9 +104,7 @@ def salvar_json(arquivo, dados, sha, mensagem):
 
 @st.cache_data(ttl=60)
 def carregar_dados_word():
-    """Lê os arquivos Word e extrai a tabela de alunos"""
     lista = []
-    
     def processar(nome_arq, categoria):
         local = []
         try:
@@ -79,32 +121,25 @@ def carregar_dados_word():
             return local
         except:
             return []
-
     l1 = processar(ARQ_PASSIVOS, "Passivo")
     l2 = processar(ARQ_CONCLUINTES, "Concluinte")
     return l1 + l2
 
 def salvar_aluno_word(arquivo_nome, numero, nome, obs):
-    """Escreve o novo aluno dentro do arquivo Word no GitHub"""
     try:
         c = repo_ref.get_contents(arquivo_nome)
         doc = Document(io.BytesIO(c.decoded_content))
-        
         if len(doc.tables) > 0:
             tab = doc.tables[0]
             row = tab.add_row()
             row.cells[0].text = numero
             row.cells[1].text = nome.upper()
-            if len(row.cells) > 2:
-                row.cells[2].text = obs
-            
+            if len(row.cells) > 2: row.cells[2].text = obs
             buffer = io.BytesIO()
             doc.save(buffer)
             repo_ref.update_file(arquivo_nome, f"Add Aluno: {nome}", buffer.getvalue(), c.sha)
             return True
-    except Exception as e:
-        st.error(f"Erro ao salvar no Word: {e}")
-        return False
+    except: return False
 
 # --- CONFIGURAÇÃO VISUAL ---
 config_data, config_sha = carregar_json(ARQ_CONFIG)
@@ -151,7 +186,7 @@ if not st.session_state['user_info']:
                     if found.get('status') == 'active':
                         st.session_state['user_info'] = found
                         st.rerun()
-                    else: st.warning("Conta pendente ou bloqueada.")
+                    else: st.warning("Sua conta ainda não foi ativada pelo Admin.")
                 else: st.error("Dados incorretos.")
                 
     with tab2:
@@ -162,11 +197,20 @@ if not st.session_state['user_info']:
                 lst = db.get("users", [])
                 if any(x['username'] == nu for x in lst): st.error("Usuário já existe.")
                 else:
-                    lst.append({"username": nu, "password": hash_senha(ns), "name": nn, "email": ne, "role": "user", "status": "pending", "unit": "PADRÃO"})
-                    if not db: db = {"users": []}
-                    db['users'] = lst
-                    salvar_json(ARQ_USERS, db, sha, f"Novo user {nu}")
-                    st.success("Cadastro enviado! Aguarde aprovação.")
+                    with st.spinner("Registrando e enviando e-mail..."):
+                        # Salva no Banco
+                        lst.append({"username": nu, "password": hash_senha(ns), "name": nn, "email": ne, "role": "user", "status": "pending", "unit": "PADRÃO"})
+                        if not db: db = {"users": []}
+                        db['users'] = lst
+                        salvar_json(ARQ_USERS, db, sha, f"Novo user {nu}")
+                        
+                        # Tenta enviar Email
+                        enviou = enviar_email_boas_vindas(ne, nu)
+                        
+                        if enviou:
+                            st.success(f"✅ Sucesso! Um e-mail foi enviado para {ne}.")
+                        else:
+                            st.warning("✅ Cadastro salvo, mas houve erro ao enviar o e-mail (verifique os Secrets).")
     st.stop()
 
 # --- SISTEMA LOGADO ---
