@@ -154,11 +154,20 @@ LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3
 
 st.set_page_config(page_title=NOME_ESCOLA, page_icon="🎓", layout="wide")
 
-# CSS CSS PERSONALIZADO
+# CSS CSS PERSONALIZADO (LOGIN MODERNO)
 st.markdown(f"""
 <style>
     :root {{ --primary-color: {COR_TEMA}; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}}
+    
+    /* Login Centralizado e Moderno */
+    .login-box {{
+        background-color: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }}
     
     .profile-container {{
         padding: 10px; border-bottom: 2px solid {COR_TEMA};
@@ -171,76 +180,92 @@ st.markdown(f"""
     }}
     .profile-container:hover .profile-popup {{ display: block; }}
     
-    div.stButton > button:first-child {{ background-color: {COR_TEMA}; color: white; }}
+    div.stButton > button:first-child {{ background-color: {COR_TEMA}; color: white; border-radius: 8px; font-weight: bold; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- TELA DE LOGIN ---
+# --- TELA DE LOGIN (MODERNA E CENTRALIZADA) ---
 if 'user_info' not in st.session_state: st.session_state['user_info'] = None
 
 if not st.session_state['user_info']:
-    st.markdown(f"<h1 style='text-align: center; color: {COR_TEMA};'>{NOME_ESCOLA}</h1>", unsafe_allow_html=True)
-    tab1, tab2 = st.tabs(["🔐 ACESSAR", "📝 SOLICITAR ACESSO"])
+    # Cria 3 colunas para centralizar o conteúdo no meio (coluna 2)
+    col_esq, col_centro, col_dir = st.columns([1, 1.5, 1])
     
-    with tab1:
-        with st.form("login"):
-            u = st.text_input("Usuário")
-            s = st.text_input("Senha", type="password")
-            if st.form_submit_button("ENTRAR"):
-                # Primeiro verifica se é a senha Mestra (Admin Geral)
-                try:
-                    senha_sistema = st.secrets["SENHA_SISTEMA"]
-                except:
-                    senha_sistema = "admin" # Fallback
-                
-                if u == "admin" and s == senha_sistema:
-                     # Cria um usuário Admin temporário na sessão se usar a senha mestra
-                     st.session_state['user_info'] = {
-                         "username": "admin", "name": "Super Admin", 
-                         "role": "admin", "email": "admin@sistema", "unit": "DIRETORIA"
-                     }
-                     st.rerun()
-                
-                # Se não for senha mestra, busca no banco JSON
-                db, _ = carregar_json(ARQ_USERS)
-                users = db.get("users", [])
-                found = next((x for x in users if x['username'] == u and x['password'] == hash_senha(s)), None)
-                
-                if found:
-                    if found.get('status') == 'active':
-                        st.session_state['user_info'] = found
-                        st.rerun()
-                    else: st.warning("Sua conta ainda não foi ativada pelo Admin.")
-                else: st.error("Dados incorretos.")
-                
-    with tab2:
-        with st.form("reg"):
-            st.write("Preencha para criar seu login:")
-            nn = st.text_input("Nome Completo")
-            ne = st.text_input("E-mail (para confirmação)")
-            nu = st.text_input("Usuário (Login)")
-            ns = st.text_input("Senha", type="password")
+    with col_centro:
+        # Espaçamento superior
+        st.write("")
+        st.write("")
+        
+        # Container com borda (Estilo Cartão)
+        with st.container(border=True):
+            # Logo e Título centralizados
+            c_img, c_tit = st.columns([1, 3])
+            with c_img:
+                st.image(LOGO_URL, width=70)
+            with c_tit:
+                st.markdown(f"<h2 style='margin-top:0px; color: {COR_TEMA};'>{NOME_ESCOLA}</h2>", unsafe_allow_html=True)
             
-            if st.form_submit_button("CADASTRAR"):
-                db, sha = carregar_json(ARQ_USERS)
-                lst = db.get("users", [])
-                if any(x['username'] == nu for x in lst): st.error("Usuário já existe.")
-                else:
-                    with st.spinner("Registrando..."):
-                        # Salva no Banco JSON
-                        lst.append({"username": nu, "password": hash_senha(ns), "name": nn, "email": ne, "role": "user", "status": "pending", "unit": "PADRÃO"})
-                        if not db: db = {"users": []}
-                        db['users'] = lst
-                        salvar_json(ARQ_USERS, db, sha, f"Novo user {nu}")
+            st.divider()
+            
+            # Abas de Login
+            tab1, tab2 = st.tabs(["🔐 ENTRAR", "📝 CRIAR CONTA"])
+            
+            with tab1:
+                with st.form("login"):
+                    u = st.text_input("Usuário")
+                    s = st.text_input("Senha", type="password")
+                    # Botão Grande
+                    if st.form_submit_button("ACESSAR SISTEMA", use_container_width=True):
+                        # Verifica Admin Mestre
+                        try:
+                            senha_sistema = st.secrets["SENHA_SISTEMA"]
+                        except:
+                            senha_sistema = "admin"
                         
-                        # Tenta enviar Email
-                        sucesso, mensagem_erro = enviar_email_boas_vindas(ne, nu)
+                        if u == "admin" and s == senha_sistema:
+                             st.session_state['user_info'] = {
+                                 "username": "admin", "name": "Super Admin", 
+                                 "role": "admin", "email": "admin@sistema", "unit": "DIRETORIA"
+                             }
+                             st.rerun()
                         
-                        if sucesso:
-                            st.success(f"✅ Sucesso! Um e-mail foi enviado para {ne}.")
+                        # Verifica Banco de Dados
+                        db, _ = carregar_json(ARQ_USERS)
+                        users = db.get("users", [])
+                        found = next((x for x in users if x['username'] == u and x['password'] == hash_senha(s)), None)
+                        
+                        if found:
+                            if found.get('status') == 'active':
+                                st.session_state['user_info'] = found
+                                st.rerun()
+                            else: st.warning("🔒 Conta aguardando aprovação.")
+                        else: st.error("❌ Usuário ou senha incorretos.")
+                        
+            with tab2:
+                with st.form("reg"):
+                    st.caption("Preencha seus dados para solicitar acesso:")
+                    nn = st.text_input("Nome Completo")
+                    ne = st.text_input("E-mail Pessoal")
+                    nu = st.text_input("Usuário (Login)")
+                    ns = st.text_input("Senha", type="password")
+                    
+                    if st.form_submit_button("CRIAR CONTA", use_container_width=True):
+                        db, sha = carregar_json(ARQ_USERS)
+                        lst = db.get("users", [])
+                        if any(x['username'] == nu for x in lst): st.error("⚠️ Este usuário já existe.")
                         else:
-                            st.warning(f"⚠️ Cadastro SALVO, mas erro no e-mail: {mensagem_erro}")
-                            st.info("Dica: Verifique se o e-mail no Secrets é o mesmo que gerou a senha.")
+                            with st.spinner("Enviando solicitação..."):
+                                lst.append({"username": nu, "password": hash_senha(ns), "name": nn, "email": ne, "role": "user", "status": "pending", "unit": "PADRÃO"})
+                                if not db: db = {"users": []}
+                                db['users'] = lst
+                                salvar_json(ARQ_USERS, db, sha, f"Novo user {nu}")
+                                
+                                sucesso, mensagem_erro = enviar_email_boas_vindas(ne, nu)
+                                
+                                if sucesso:
+                                    st.success(f"✅ Conta criada! Verifique seu e-mail: {ne}")
+                                else:
+                                    st.warning(f"⚠️ Conta salva, mas erro no e-mail: {mensagem_erro}")
     st.stop()
 
 # --- SISTEMA LOGADO (DASHBOARD) ---
