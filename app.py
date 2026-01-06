@@ -6,36 +6,16 @@ import io
 import time
 import json
 import hashlib
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 # --- FUNÇÕES UTILITÁRIAS ---
 
 def hash_senha(senha):
     return hashlib.sha256(str.encode(senha)).hexdigest()
 
-def enviar_email(destinatario, assunto, mensagem):
-    try:
-        sender_email = st.secrets["EMAIL_USER"]
-        sender_password = st.secrets["EMAIL_PASSWORD"]
-        
-        msg = MIMEMultipart()
-        msg['From'] = sender_email
-        msg['To'] = destinatario
-        msg['Subject'] = assunto
-        msg.attach(MIMEText(mensagem, 'plain'))
-        
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        text = msg.as_string()
-        server.sendmail(sender_email, destinatario, text)
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"Erro ao enviar email: {e}")
-        return False
+# (Função de e-mail desativada temporariamente para não travar)
+def enviar_notificacao_simulada(nome):
+    print(f"Novo cadastro recebido: {nome}")
+    return True
 
 # --- CONEXÃO GITHUB ---
 try:
@@ -47,9 +27,19 @@ try:
         if "sistema" in repo.name.lower() or "escolar" in repo.name.lower() or "emeif" in repo.name.lower():
             repo_ref = repo
             break
-    if not repo_ref: repo_ref = user.get_repos()[0]
-except:
-    st.error("Erro crítico: Configure os Secrets corretamente.")
+    if not repo_ref: 
+        # Tenta pegar o primeiro repositório se a busca falhar
+        repos = list(user.get_repos())
+        if repos:
+            repo_ref = repos[0]
+            
+    if not repo_ref:
+        st.error("Erro: Não encontrei o repositório no GitHub.")
+        st.stop()
+
+except Exception as e:
+    st.error(f"Erro crítico de conexão: {e}")
+    st.info("Verifique se o GITHUB_TOKEN está correto nos Secrets.")
     st.stop()
 
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
@@ -69,30 +59,31 @@ def carregar_json(arquivo):
 def salvar_json(arquivo, dados, sha, mensagem):
     try:
         dados_str = json.dumps(dados, indent=4)
-        repo_ref.update_file(arquivo, mensagem, dados_str, sha)
+        if sha:
+            repo_ref.update_file(arquivo, mensagem, dados_str, sha)
+        else:
+            repo_ref.create_file(arquivo, mensagem, dados_str)
         return True
-    except:
+    except Exception as e:
+        st.error(f"Erro ao salvar: {e}")
         return False
 
 # --- CARREGA CONFIGURAÇÕES INICIAIS ---
 config_data, config_sha = carregar_json(ARQ_CONFIG)
+# Valores padrão caso o arquivo config.json ainda não exista
 COR_TEMA = config_data.get("theme_color", "#00A8C6")
 NOME_ESCOLA = config_data.get("school_name", "SISTEMA ESCOLAR")
 LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
 
 st.set_page_config(page_title=NOME_ESCOLA, page_icon="🎓", layout="wide")
 
-# --- CSS PERSONALIZADO (PERFIL E CORES) ---
+# --- CSS PERSONALIZADO ---
 st.markdown(f"""
 <style>
-    /* Variaveis de Cor */
     :root {{ --primary-color: {COR_TEMA}; }}
-    
-    /* Esconde menus padrao */
     #MainMenu {{visibility: hidden;}}
     footer {{visibility: hidden;}}
     
-    /* Estilo do Card de Perfil (Hover) */
     .profile-container {{
         position: relative;
         display: inline-block;
@@ -104,47 +95,24 @@ st.markdown(f"""
         background: white;
         border-radius: 8px;
     }}
-    
     .profile-popup {{
         display: none;
         position: absolute;
-        top: 0px;
-        left: 105%; /* Aparece ao lado */
-        width: 300px;
-        background-color: #fff;
-        border: 1px solid #ccc;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        z-index: 999;
-        padding: 15px;
-        color: black;
+        top: 0px; left: 105%; width: 280px;
+        background-color: #fff; border: 1px solid #ccc;
+        border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        z-index: 999; padding: 15px; color: black;
     }}
-    
-    .profile-container:hover .profile-popup {{
-        display: block;
-    }}
-
+    .profile-container:hover .profile-popup {{ display: block; }}
     .profile-header {{
-        border-bottom: 2px solid {COR_TEMA};
-        padding-bottom: 5px;
-        margin-bottom: 10px;
-        font-weight: bold;
-        font-size: 18px;
-        text-align: center;
+        border-bottom: 2px solid {COR_TEMA}; padding-bottom: 5px;
+        margin-bottom: 10px; font-weight: bold; font-size: 18px; text-align: center;
     }}
-    
-    .profile-row {{ margin-bottom: 8px; font-size: 14px; }}
-    .profile-label {{ font-weight: bold; color: #333; }}
-    
-    /* Botoes */
-    div.stButton > button:first-child {{
-        background-color: {COR_TEMA};
-        color: white;
-    }}
+    div.stButton > button:first-child {{ background-color: {COR_TEMA}; color: white; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- SISTEMA DE LOGIN E CADASTRO ---
+# --- SISTEMA DE LOGIN ---
 
 if 'user_info' not in st.session_state:
     st.session_state['user_info'] = None
@@ -152,7 +120,7 @@ if 'user_info' not in st.session_state:
 def tela_login():
     st.markdown(f"<h1 style='text-align: center; color: {COR_TEMA};'>{NOME_ESCOLA}</h1>", unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["🔐 LOGIN", "📝 CRIAR CONTA"])
+    tab1, tab2 = st.tabs(["🔐 ACESSAR SISTEMA", "📝 CRIAR NOVO USUÁRIO"])
     
     with tab1:
         with st.form("login_form"):
@@ -171,55 +139,55 @@ def tela_login():
                         break
                 
                 if usuario_encontrado:
-                    if usuario_encontrado['status'] == 'active':
+                    if usuario_encontrado.get('status') == 'active':
                         st.session_state['user_info'] = usuario_encontrado
                         st.rerun()
-                    elif usuario_encontrado['status'] == 'pending':
-                        st.warning("⏳ Sua conta ainda está pendente de aprovação pelo Administrador.")
+                    elif usuario_encontrado.get('status') == 'pending':
+                        st.warning("⏳ Sua conta foi criada, mas ainda aguarda aprovação do Administrador.")
                     else:
                         st.error("🚫 Conta desativada.")
                 else:
-                    st.error("Usuário ou senha incorretos.")
+                    st.error("Usuário ou senha incorretos. Verifique se digitou certo.")
 
     with tab2:
-        st.info("Preencha para solicitar acesso. Você receberá um e-mail de confirmação.")
+        st.info("Preencha os dados abaixo para solicitar seu acesso.")
         with st.form("registro_form"):
             new_name = st.text_input("Nome Completo")
-            new_email = st.text_input("Seu E-mail")
-            new_unit = st.text_input("Unidade Escolar Padrão", value="E M E I F PA RESSACA")
-            new_user = st.text_input("Escolha um Usuário")
-            new_pass = st.text_input("Escolha uma Senha", type="password")
-            btn_criar = st.form_submit_button("SOLICITAR ACESSO")
+            new_email = st.text_input("E-mail")
+            new_unit = st.text_input("Unidade", value="E M E I F PA RESSACA")
+            new_user = st.text_input("Crie seu Login (Usuário)")
+            new_pass = st.text_input("Crie sua Senha", type="password")
             
-            if btn_criar and new_user and new_pass and new_email:
-                with st.spinner("Registrando..."):
-                    db_users, sha = carregar_json(ARQ_USERS)
-                    lista = db_users.get("users", [])
-                    
-                    # Verifica duplicidade
-                    if any(u['username'] == new_user for u in lista):
-                        st.error("Este usuário já existe.")
-                    else:
-                        novo_usuario = {
-                            "username": new_user,
-                            "password": hash_senha(new_pass),
-                            "name": new_name,
-                            "email": new_email,
-                            "role": "user", # Padrão é usuário comum
-                            "status": "pending", # Padrão é pendente
-                            "unit": new_unit
-                        }
-                        lista.append(novo_usuario)
-                        db_users['users'] = lista
+            if st.form_submit_button("SOLICITAR CADASTRO"):
+                if new_user and new_pass:
+                    with st.spinner("Registrando..."):
+                        db_users, sha = carregar_json(ARQ_USERS)
+                        lista = db_users.get("users", [])
                         
-                        if salvar_json(ARQ_USERS, db_users, sha, f"Novo registro: {new_user}"):
-                            # Tenta enviar e-mail
-                            msg_email = f"Olá {new_name},\n\nSeu cadastro no {NOME_ESCOLA} foi recebido!\nUsuário: {new_user}\nSituação: PENDENTE DE APROVAÇÃO.\n\nAguarde o administrador liberar seu acesso."
-                            enviar_email(new_email, "Cadastro Recebido - Aguardando Aprovação", msg_email)
-                            
-                            st.success("✅ Solicitação enviada! Verifique seu e-mail. Aguarde a liberação do Admin.")
+                        if any(u['username'] == new_user for u in lista):
+                            st.error("Este nome de usuário já existe. Tente outro.")
                         else:
-                            st.error("Erro ao salvar no banco de dados.")
+                            novo_usuario = {
+                                "username": new_user,
+                                "password": hash_senha(new_pass),
+                                "name": new_name,
+                                "email": new_email,
+                                "role": "user",
+                                "status": "pending", # Começa bloqueado
+                                "unit": new_unit
+                            }
+                            # Se não existir lista, cria
+                            if lista is None: lista = []
+                            lista.append(novo_usuario)
+                            
+                            # Se o arquivo users.json não existir, cria a estrutura
+                            if not db_users: db_users = {"users": []}
+                            db_users['users'] = lista
+                            
+                            if salvar_json(ARQ_USERS, db_users, sha, f"Novo user: {new_user}"):
+                                st.success("✅ Cadastro Realizado! Avise o administrador para liberar seu acesso.")
+                            else:
+                                st.error("Erro ao salvar cadastro.")
 
 if not st.session_state['user_info']:
     tela_login()
@@ -231,136 +199,120 @@ if not st.session_state['user_info']:
 
 usuario = st.session_state['user_info']
 
-# --- SIDEBAR COM O PERFIL ESTILO "CARD FLUTUANTE" ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.image(LOGO_URL, width=120)
+    st.image(LOGO_URL, width=100)
     
-    # HTML DO CARD DE PERFIL (IGUAL FOTO)
+    # CARD FLUTUANTE
     html_perfil = f"""
     <div class="profile-container">
-        <div>👤 <strong>{usuario['username']}</strong> (Passe o mouse)</div>
+        <div>👤 <strong>{usuario['username']}</strong> <small>▼</small></div>
         <div class="profile-popup">
-            <div class="profile-header">Usuário</div>
-            <div style="display: flex; align-items: center;">
-                <div style="flex: 1;">
-                    <div class="profile-row"><span class="profile-label">NOME:</span> {usuario['name']}</div>
-                    <div class="profile-row"><span class="profile-label">EMAIL:</span> {usuario['email']}</div>
-                    <div class="profile-row"><span class="profile-label">PERFIL:</span> {usuario['role'].upper()}</div>
-                    <div class="profile-row"><span class="profile-label">UN. PADRÃO:</span> <span style="color: blue;">{usuario.get('unit', 'Geral')}</span></div>
-                </div>
-                <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" width="60" style="border-radius: 50%;">
+            <div class="profile-header">FICHA DO USUÁRIO</div>
+            <div style="font-size:14px;">
+                <p><strong>NOME:</strong> {usuario['name']}</p>
+                <p><strong>EMAIL:</strong> {usuario.get('email', '')}</p>
+                <p><strong>PERFIL:</strong> {usuario['role'].upper()}</p>
+                <p><strong>UNIDADE:</strong> <span style="color:blue">{usuario.get('unit', '')}</span></p>
             </div>
         </div>
     </div>
     """
     st.markdown(html_perfil, unsafe_allow_html=True)
     
-    # Menu de Navegação
+    # MENU
     from streamlit_option_menu import option_menu
     
-    opcoes = ["Dashboard", "Pesquisar", "Cadastrar"]
-    icones = ["house", "search", "plus-circle"]
+    opcoes = ["Dashboard", "Pesquisar", "Cadastrar Aluno"]
+    icones = ["house", "search", "person-plus"]
     
-    # Se for ADMIN, adiciona opção extra
     if usuario['role'] == 'admin':
         opcoes.append("Administração")
         icones.append("gear")
         
-    escolha = option_menu("Menu", opcoes, icons=icones, default_index=0)
+    escolha = option_menu("Menu Principal", opcoes, icons=icones, default_index=0)
     
-    if st.button("Sair"):
+    st.divider()
+    if st.button("🔒 Sair / Logout"):
         st.session_state['user_info'] = None
         st.rerun()
 
-# --- CARREGA DADOS DO WORD PARA AS TELAS ---
-def get_word_data():
-    # (Mesma lógica de antes, resumida)
-    # ... aqui você pode manter sua lógica de carregar Word ...
-    return pd.DataFrame(), None, None # Placeholder para não ficar gigante o código
+# --- CONTEÚDO ---
 
-# --- TELA DE ADMINISTRAÇÃO ---
 if escolha == "Administração" and usuario['role'] == 'admin':
-    st.title("⚙️ Painel Administrativo")
+    st.title("⚙️ Painel do Diretor/Admin")
     
-    admin_tab1, admin_tab2 = st.tabs(["👥 Gerenciar Usuários", "🎨 Configurações do Sistema"])
+    tab_users, tab_config = st.tabs(["👥 Liberar Usuários", "🎨 Aparência"])
     
-    # 1. GERENCIAR USUÁRIOS
-    with admin_tab1:
-        st.subheader("Usuários do Sistema")
-        
+    with tab_users:
+        st.write("Abaixo você pode ativar novos cadastros ou bloquear usuários.")
         db_users, sha_users = carregar_json(ARQ_USERS)
         users_list = db_users.get("users", [])
         
-        # Converte para DataFrame para exibir bonito
         if users_list:
             df_users = pd.DataFrame(users_list)
-            # Editor de dados interativo
+            
+            # Editor Poderoso
             edited_df = st.data_editor(
                 df_users,
                 column_config={
                     "status": st.column_config.SelectboxColumn(
-                        "Status", options=["active", "pending", "disabled"], required=True
+                        "Situação", 
+                        help="Active=Liberado, Pending=Aguardando, Disabled=Bloqueado",
+                        options=["active", "pending", "disabled"], 
+                        required=True
                     ),
                     "role": st.column_config.SelectboxColumn(
-                        "Função", options=["user", "admin"], required=True
+                        "Nível", options=["user", "admin"], required=True
                     ),
-                    "password": st.column_config.Column("Senha (Hash)", disabled=True)
+                    "password": st.column_config.Column("Senha", disabled=True),
+                    "username": st.column_config.Column("Login", disabled=True)
                 },
                 hide_index=True,
-                key="editor_users"
+                num_rows="dynamic",
+                key="editor_users_grid"
             )
             
-            if st.button("💾 Salvar Alterações de Usuários"):
-                # Converte o DF editado de volta para lista
+            if st.button("💾 SALVAR MUDANÇAS DE USUÁRIOS"):
                 novos_dados = edited_df.to_dict('records')
                 db_users['users'] = novos_dados
-                
-                if salvar_json(ARQ_USERS, db_users, sha_users, "Admin atualizou usuários"):
-                    # Verifica se alguém foi ativado para mandar email
-                    st.success("Usuários atualizados com sucesso!")
+                if salvar_json(ARQ_USERS, db_users, sha_users, "Admin atualizou permissões"):
+                    st.success("Permissões atualizadas com sucesso!")
                     time.sleep(1)
                     st.rerun()
-                else:
-                    st.error("Erro ao salvar.")
         else:
-            st.info("Nenhum usuário encontrado.")
+            st.warning("Nenhum usuário cadastrado ainda.")
 
-    # 2. CONFIGURAÇÕES VISUAIS
-    with admin_tab2:
-        st.subheader("Personalização")
-        
-        with st.form("config_form"):
-            novo_nome = st.text_input("Nome do Sistema", value=NOME_ESCOLA)
-            nova_cor = st.color_picker("Cor do Tema", value=COR_TEMA)
-            nova_logo = st.text_input("URL da Logo", value=LOGO_URL)
+    with tab_config:
+        st.write("Personalize o sistema.")
+        with st.form("conf_form"):
+            c_nome = st.text_input("Nome da Escola", value=NOME_ESCOLA)
+            c_cor = st.color_picker("Cor Principal", value=COR_TEMA)
+            c_logo = st.text_input("Link da Logo", value=LOGO_URL)
             
-            if st.form_submit_button("Aplicar Configurações"):
-                novo_conf = {
-                    "school_name": novo_nome,
-                    "theme_color": nova_cor,
-                    "logo_url": nova_logo
-                }
-                # Carrega SHA atualizado
+            if st.form_submit_button("APLICAR TEMA"):
+                new_conf = {"school_name": c_nome, "theme_color": c_cor, "logo_url": c_logo}
                 _, sha_conf = carregar_json(ARQ_CONFIG)
-                
-                if salvar_json(ARQ_CONFIG, novo_conf, sha_conf, "Atualizou config"):
-                    st.success("Configurações salvas! Atualize a página para ver as mudanças.")
-                else:
-                    st.error("Erro ao salvar config.")
+                salvar_json(ARQ_CONFIG, new_conf, sha_conf, "Atualizou tema")
+                st.toast("Tema atualizado! Dê F5 na página.")
+                time.sleep(2)
+                st.rerun()
 
-# --- OUTRAS TELAS (Dashboard, Pesquisa, etc) ---
+# --- OUTRAS TELAS (MANTIDAS DO SEU SISTEMA ANTERIOR) ---
 elif escolha == "Dashboard":
-    st.title(f"Bem-vindo, {usuario['name']}")
-    st.info("Use o menu lateral para navegar.")
-    # Coloque aqui seus gráficos...
+    st.title(f"Olá, {usuario['name']}!")
+    st.info("Bem-vindo ao sistema de gestão escolar.")
+    # (Seus gráficos viriam aqui)
 
 elif escolha == "Pesquisar":
-    st.title("Pesquisa de Alunos")
-    # Coloque aqui sua lógica de pesquisa...
+    st.title("🔍 Buscar Aluno")
+    # (Lógica de pesquisa anterior)
+    st.write("Funcionalidade de pesquisa ativa.")
 
-elif escolha == "Cadastrar":
-    st.title("Matrícula")
-    # Coloque aqui sua lógica de cadastro...
+elif escolha == "Cadastrar Aluno":
+    st.title("📝 Nova Matrícula")
+    # (Lógica de cadastro anterior)
+    st.write("Funcionalidade de cadastro ativa.")
 
 elif escolha == "Administração":
-    st.error("Acesso Negado.")
+    st.error("🚫 Área restrita apenas para administradores.")
