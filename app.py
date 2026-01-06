@@ -5,15 +5,6 @@ from github import Github
 import io
 import time
 
-# Tenta importar as bibliotecas visuais. Se der erro, avisa amigavelmente.
-try:
-    import plotly.express as px
-    from streamlit_option_menu import option_menu
-except ImportError:
-    st.error("⚠️ ERRO DE INSTALAÇÃO: Faltam bibliotecas no requirements.txt")
-    st.info("Adicione 'plotly' e 'streamlit-option-menu' no seu arquivo requirements.txt no GitHub.")
-    st.stop()
-
 # --- CONFIGURAÇÃO INICIAL ---
 st.set_page_config(page_title="Gestão Escolar", page_icon="🎓", layout="wide")
 
@@ -32,34 +23,41 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Tenta importar bibliotecas extras, se não tiver, usa padrão
+try:
+    import plotly.express as px
+    from streamlit_option_menu import option_menu
+    tem_visuais = True
+except:
+    tem_visuais = False
+
 # --- CONEXÃO GITHUB AUTOMÁTICA ---
 try:
     TOKEN = st.secrets["GITHUB_TOKEN"]
     g = Github(TOKEN)
     user = g.get_user()
     
-    # LÓGICA INTELIGENTE: Pega o primeiro repositório que tiver "sistema" ou "alunos" no nome
+    # LÓGICA INTELIGENTE PARA ACHAR O REPOSITÓRIO
     repo_ref = None
-    repos_encontrados = []
-    
+    # 1. Tenta pelo nome exato ou parecido
     for repo in user.get_repos():
-        repos_encontrados.append(repo.name)
-        # Verifica palavras chaves comuns
-        if "sistema" in repo.name.lower() or "alunos" in repo.name.lower() or "emeif" in repo.name.lower():
+        if "sistema" in repo.name.lower() or "escolar" in repo.name.lower() or "emeif" in repo.name.lower():
             repo_ref = repo
             break
             
-    # Se não achou por nome, tenta pegar o último atualizado (fallback)
-    if not repo_ref and repos_encontrados:
-        repo_ref = user.get_repo(repos_encontrados[0])
+    # 2. Se não achou, pega o último modificado
+    if not repo_ref:
+        repos = list(user.get_repos())
+        if repos:
+            repo_ref = repos[0]
 
     if not repo_ref:
-        st.error(f"❌ Não encontrei nenhum repositório. Repositórios na sua conta: {repos_encontrados}")
+        st.error("❌ Não encontrei nenhum repositório no seu GitHub.")
         st.stop()
         
 except Exception as e:
     st.error(f"⚙️ Erro de Conexão com GitHub: {e}")
-    st.info("Verifique se o Token está colado corretamente nos Secrets do Streamlit.")
+    st.info("Verifique se o Token está nos Secrets.")
     st.stop()
 
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
@@ -69,17 +67,15 @@ ARQ_CONCLUINTES = 'CONCLUINTES- PA-RESSACA.docx'
 
 @st.cache_data(ttl=60)
 def carregar_dados_simples():
-    """Lê os arquivos Word e retorna apenas listas de nomes (sem travar o cache)"""
-    lista_completa = []
+    """Lê os arquivos Word e retorna lista limpa"""
+    lista_final = []
     
-    def processar_arquivo(nome_arquivo, categoria):
-        local_lista = []
+    def ler_arquivo(nome_arq, categoria):
+        local = []
         try:
-            # Pega o arquivo do GitHub
-            file_content = repo_ref.get_contents(nome_arquivo)
-            # Abre o Word na memória
-            doc = Document(io.BytesIO(file_content.decoded_content))
-            sha = file_content.sha
+            conteudo = repo_ref.get_contents(nome_arq)
+            doc = Document(io.BytesIO(conteudo.decoded_content))
+            sha = conteudo.sha
             
             for tabela in doc.tables:
                 for linha in tabela.rows:
@@ -87,20 +83,20 @@ def carregar_dados_simples():
                         nome = linha.cells[1].text.strip().upper()
                         obs = linha.cells[2].text.strip() if len(linha.cells) > 2 else ""
                         if len(nome) > 3 and "NOME" not in nome:
-                            local_lista.append({"Nome": nome, "Categoria": categoria, "Obs": obs})
-            return local_lista, sha
+                            local.append({"Nome": nome, "Categoria": categoria, "Obs": obs})
+            return local, sha
         except:
             return [], None
 
-    l_passivos, sha_p = processar_arquivo(ARQ_PASSIVOS, "Passivo")
-    l_concluintes, sha_c = processar_arquivo(ARQ_CONCLUINTES, "Concluinte")
+    l_p, sha_p = ler_arquivo(ARQ_PASSIVOS, "Passivo")
+    l_c, sha_c = ler_arquivo(ARQ_CONCLUINTES, "Concluinte")
     
-    return l_passivos + l_concluintes, sha_p, sha_c
+    return l_p + l_c, sha_p, sha_c
 
-def salvar_no_github(arquivo_alvo, nome, obs):
+def salvar_github(arquivo, nome, obs):
     try:
-        contents = repo_ref.get_contents(arquivo_alvo)
-        doc = Document(io.BytesIO(contents.decoded_content))
+        conteudo = repo_ref.get_contents(arquivo)
+        doc = Document(io.BytesIO(conteudo.decoded_content))
         
         if len(doc.tables) > 0:
             tab = doc.tables[0]
@@ -112,28 +108,32 @@ def salvar_no_github(arquivo_alvo, nome, obs):
             
             buffer = io.BytesIO()
             doc.save(buffer)
-            repo_ref.update_file(arquivo_alvo, f"Add: {nome}", buffer.getvalue(), contents.sha)
+            repo_ref.update_file(arquivo, f"Add: {nome}", buffer.getvalue(), conteudo.sha)
             return True
     except:
         return False
     return False
 
-# --- CARREGAR DADOS ---
+# --- CARREGAMENTO ---
 dados, sha_p, sha_c = carregar_dados_simples()
 df = pd.DataFrame(dados)
 
 # --- MENU LATERAL ---
 with st.sidebar:
-    st.title("🏫 Menu Escolar")
-    # Menu simples e robusto
-    escolha = option_menu(
-        menu_title=None,
-        options=["Dashboard", "Pesquisar", "Cadastrar"],
-        icons=["house", "search", "plus-circle"],
-        default_index=0,
-    )
-    st.write(f"📁 Conectado em: **{repo_ref.name}**")
-    if st.button("🔄 Atualizar Dados"):
+    st.title("🏫 Menu")
+    
+    if tem_visuais:
+        escolha = option_menu(
+            menu_title=None,
+            options=["Dashboard", "Pesquisar", "Cadastrar"],
+            icons=["house", "search", "plus-circle"],
+            default_index=0,
+        )
+    else:
+        escolha = st.radio("Menu", ["Dashboard", "Pesquisar", "Cadastrar"])
+
+    st.caption(f"Conectado: {repo_ref.name}")
+    if st.button("🔄 Atualizar"):
         st.cache_data.clear()
         st.rerun()
 
@@ -142,38 +142,43 @@ with st.sidebar:
 if escolha == "Dashboard":
     st.title("📊 Visão Geral")
     if not df.empty:
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Alunos", len(df))
-        col2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"]))
-        col3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total", len(df))
+        c2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"]))
+        c3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
         
         st.divider()
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("Gráfico")
-            fig = px.pie(df, names='Categoria', hole=0.4, color_discrete_sequence=['#00A8C6', '#FF6B6B'])
-            st.plotly_chart(fig, use_container_width=True)
-        with c2:
-            st.subheader("Últimos Cadastros")
-            st.dataframe(df.tail(5)[['Nome', 'Categoria']], hide_index=True)
-    else:
-        st.warning("Nenhum aluno encontrado nos arquivos.")
+        
+        if tem_visuais:
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.subheader("Categorias")
+                fig = px.pie(df, names='Categoria', hole=0.4)
+                st.plotly_chart(fig, use_container_width=True)
+            with col_b:
+                st.subheader("Últimos")
+                st.dataframe(df.tail(5), hide_index=True)
+        else:
+            st.dataframe(df.tail(10), use_container_width=True)
 
 if escolha == "Pesquisar":
     st.title("🔍 Buscar Aluno")
-    busca = st.text_input("Digite o nome:")
+    busca = st.text_input("Nome:")
+    
     if not df.empty:
         df_show = df
         if busca:
             df_show = df[df['Nome'].str.contains(busca.upper(), na=False)]
         
+        # AQUI ESTAVA O ERRO - REMOVI O 'BadgeColumn' QUE TRAVAVA
         st.dataframe(
             df_show, 
             use_container_width=True, 
             height=500,
             column_config={
                 "Nome": st.column_config.TextColumn("Nome Completo"),
-                "Categoria": st.column_config.BadgeColumn("Status"),
+                "Categoria": st.column_config.TextColumn("Status"), # Corrigido para Texto Simples
+                "Obs": st.column_config.TextColumn("Observações"),
             },
             hide_index=True
         )
@@ -188,7 +193,7 @@ if escolha == "Cadastrar":
         if st.form_submit_button("💾 Salvar"):
             arq = ARQ_CONCLUINTES if tipo == "Concluintes" else ARQ_PASSIVOS
             with st.spinner("Salvando..."):
-                if salvar_no_github(arq, nome, obs):
+                if salvar_github(arq, nome, obs):
                     st.success("Salvo com sucesso!")
                     time.sleep(1)
                     st.cache_data.clear()
