@@ -11,10 +11,11 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from streamlit_option_menu import option_menu
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
+# --- CONFIGURAÇÃO DA PÁGINA (Configuração inicial) ---
 ST_COR_PADRAO = "#00A8C6"
 ST_TITULO_PADRAO = "SISTEMA ESCOLAR"
 
+# Layout "wide" é importante para o CSS funcionar bem
 st.set_page_config(page_title=ST_TITULO_PADRAO, page_icon="🎓", layout="wide")
 
 # --- FUNÇÕES DE SEGURANÇA E EMAIL ---
@@ -25,6 +26,7 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
     try:
         remetente = st.secrets["EMAIL_USER"]
         senha_app = st.secrets["EMAIL_PASSWORD"]
+        # Garante que não há espaços na senha
         senha_app = senha_app.replace(" ", "").strip()
         remetente = remetente.strip()
         
@@ -35,10 +37,12 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         
         texto = f"""
         Olá, {nome_usuario}!
+        
         Recebemos sua solicitação de cadastro.
         Login: {destinatario}
         Situação: PENDENTE DE APROVAÇÃO.
-        Aguarde a liberação do administrador.
+        
+        Aguarde a liberação do administrador para acessar o sistema.
         """
         msg.attach(MIMEText(texto, 'plain'))
         
@@ -57,13 +61,16 @@ try:
     g = Github(TOKEN)
     user = g.get_user()
     repo_ref = None
+    # Tenta encontrar o repositório pelo nome
     for repo in user.get_repos():
         if "sistema" in repo.name.lower() or "escolar" in repo.name.lower() or "emeif" in repo.name.lower():
             repo_ref = repo
             break
+    # Se não achar, pega o primeiro da lista
     if not repo_ref: 
         repos = list(user.get_repos())
         if repos: repo_ref = repos[0]
+            
     if not repo_ref:
         st.error("Erro Crítico: Repositório não encontrado.")
         st.stop()
@@ -88,10 +95,13 @@ def carregar_json(arquivo):
 def salvar_json(arquivo, dados, sha, mensagem):
     try:
         dados_str = json.dumps(dados, indent=4)
-        if sha: repo_ref.update_file(arquivo, mensagem, dados_str, sha)
-        else: repo_ref.create_file(arquivo, mensagem, dados_str)
+        if sha:
+            repo_ref.update_file(arquivo, mensagem, dados_str, sha)
+        else:
+            repo_ref.create_file(arquivo, mensagem, dados_str)
         return True
-    except: return False
+    except:
+        return False
 
 @st.cache_data(ttl=60)
 def carregar_dados_word():
@@ -110,7 +120,8 @@ def carregar_dados_word():
                         if len(nome) > 3 and "NOME" not in nome:
                             local.append({"Numero": num, "Nome": nome, "Categoria": categoria, "Obs": obs})
             return local
-        except: return []
+        except:
+            return []
     return processar(ARQ_PASSIVOS, "Passivo") + processar(ARQ_CONCLUINTES, "Concluinte")
 
 def salvar_aluno_word(arquivo_nome, numero, nome, obs):
@@ -135,17 +146,37 @@ COR_TEMA = config_data.get("theme_color", ST_COR_PADRAO)
 NOME_ESCOLA = config_data.get("school_name", ST_TITULO_PADRAO)
 LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
 
-# --- CSS PREMIUM E MODERNO ---
+# --- CSS PREMIUM E MODERNO (REFORÇADO) ---
 st.markdown(f"""
 <style>
+    /* Importa fonte moderna */
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
     html, body, [class*="css"] {{ font-family: 'Roboto', sans-serif; }}
     
-    /* ESCONDER ITENS PADRÃO DO STREAMLIT (MANAGE APP, FOOTER, HEADER) */
-    .stApp > header {{visibility: hidden;}}
-    #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    [data-testid="stToolbar"] {{visibility: hidden !important; display: none !important;}}
+    /* --- CSS REFORÇADO PARA ESCONDER A BARRA DO STREAMLIT --- */
+    /* Esconde o header padrão, menu de hambúrguer e footer */
+    header[data-testid="stHeader"] {{
+        visibility: hidden !important;
+        display: none !important;
+    }}
+    /* Esconde a barra de ferramentas inferior (onde fica o "Gerenciar aplicativo") */
+    [data-testid="stToolbar"] {{
+        visibility: hidden !important;
+        display: none !important;
+        height: 0px !important;
+    }}
+    /* Esconde o rodapé padrão */
+    footer {{
+        visibility: hidden !important;
+        display: none !important;
+    }}
+    /* Esconde o menu principal (três pontinhos) */
+    #MainMenu {{
+        visibility: hidden !important;
+        display: none !important;
+    }}
+    
+    /* Ajuste de padding para o conteúdo não ficar colado no topo */
     .block-container {{ padding-top: 2rem; padding-bottom: 5rem; }}
 
     :root {{
@@ -206,20 +237,20 @@ st.markdown(f"""
 if 'user_info' not in st.session_state: st.session_state['user_info'] = None
 
 # ==============================================================================
-# TELA DE LOGIN (COMPACTA)
+# TELA DE LOGIN (AINDA MAIS COMPACTA)
 # ==============================================================================
 if not st.session_state['user_info']:
-    # AJUSTE DAS COLUNAS: [3, 2, 3] faz a coluna do meio ficar menor
-    col_e, col_c, col_d = st.columns([3, 2, 3])
+    # AJUSTE DAS COLUNAS: [5, 3, 5] deixa o meio ainda menor
+    col_e, col_c, col_d = st.columns([5, 3, 5])
     
     with col_c:
-        st.write("")
+        st.write("") # Espaço superior
         st.write("")
         # Container do Login
         with st.container():
             st.markdown(f"""
             <div class="login-container" style="text-align:center;">
-                <img src="{LOGO_URL}" width="80" style="margin-bottom:10px;">
+                <img src="{LOGO_URL}" width="70" style="margin-bottom:10px;">
                 <h3 style="color:{COR_TEMA}; margin:0; font-weight:700;">{NOME_ESCOLA}</h3>
                 <p style="color:gray; font-size:12px;">Gestão Acadêmica</p>
                 <hr style="opacity:0.2; margin: 15px 0;">
@@ -243,10 +274,11 @@ if not st.session_state['user_info']:
                                 "name": "Administrador Principal", 
                                 "role": "admin", 
                                 "email": "admin@emeifparessaca.com", 
-                                "unit": "SUPER USÚARIO"
+                                "unit": "SUPER USUÁRIO"
                             }
                             st.rerun()
                             
+                        # Verifica outros usuários
                         db, _ = carregar_json(ARQ_USERS)
                         u = next((x for x in db.get("users", []) if x.get('email', '').lower() == email.lower() and x['password'] == hash_senha(senha)), None)
                         if u:
@@ -293,7 +325,7 @@ with st.container():
         """, unsafe_allow_html=True)
         
     with c_user:
-        # Perfil com Popup Corrigido (Usando st.popover ou Expander seria ideal, mas vamos de CSS puro corrigido)
+        # Perfil com Popup Corrigido
         c_info, c_logout = st.columns([4, 1])
         with c_info:
             with st.expander(f"👤 {user['name'].split()[0]}", expanded=False):
