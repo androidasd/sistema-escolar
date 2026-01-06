@@ -9,6 +9,7 @@ import hashlib
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from streamlit_option_menu import option_menu # Importação movida para o topo
 
 # --- FUNÇÕES DE SEGURANÇA E EMAIL ---
 
@@ -150,67 +151,81 @@ LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3
 
 st.set_page_config(page_title=NOME_ESCOLA, page_icon="🎓", layout="wide")
 
-# --- CSS PREMIUM ---
+# --- CSS GLOBAL E DA NAVBAR SUPERIOR ---
 st.markdown(f"""
 <style>
     :root {{ --primary-color: {COR_TEMA}; }}
-    #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}}
+    #MainMenu {{visibility: hidden;}} 
+    footer {{visibility: hidden;}}
+    header {{visibility: hidden;}} /* Esconde cabeçalho padrão do Streamlit */
     
-    /* Centralizar Abas de Login */
-    .stTabs [data-baseweb="tab-list"] {{
-        justify-content: center;
-    }}
+    /* Ajuste de padding para o conteúdo não ficar debaixo da navbar */
+    .block-container {{ padding-top: 1rem; }}
+
+    /* CSS da Tela de Login */
+    .stTabs [data-baseweb="tab-list"] {{ justify-content: center; }}
     
-    /* Botões Premium */
+    /* Botões */
     div.stButton > button:first-child {{
-        background-color: {COR_TEMA}; 
-        color: white; 
-        border-radius: 8px; 
-        font-weight: bold;
-        border: none;
-        padding: 0.5rem 1rem;
-        transition: all 0.3s;
+        background-color: {COR_TEMA}; color: white; border-radius: 8px; font-weight: bold; border: none;
     }}
-    div.stButton > button:first-child:hover {{
-        opacity: 0.8;
-        transform: scale(1.02);
+    div.stButton > button:first-child:hover {{ opacity: 0.9; }}
+
+    /* --- CSS DA NOVA BARRA SUPERIOR (NAVBAR) --- */
+    
+    /* Container principal da barra superior */
+    .top-navbar-container {{
+        background-color: {COR_TEMA};
+        padding: 0.5rem 1rem;
+        border-radius: 0 0 15px 15px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        color: white;
+        display: flex; align-items: center;
     }}
 
-    /* Card de Login */
-    .block-container {{ padding-top: 2rem; }}
-    
-    /* Card de Perfil */
-    .profile-container {{
-        padding: 15px; 
-        border-left: 5px solid {COR_TEMA};
-        margin-bottom: 20px; 
-        background: white; 
-        border-radius: 8px; 
+    /* Estilo do Cartão de Perfil na Barra Superior */
+    .top-profile-container {{
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
         cursor: pointer;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        color: white;
+        position: relative;
+        padding: 5px;
     }}
-    .profile-popup {{
-        display: none; position: absolute; top: 0; left: 105%; width: 280px;
-        background: white; border: 1px solid #eee; padding: 20px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 999; border-radius: 10px;
+    .top-profile-popup {{
+        display: none;
+        position: absolute;
+        top: 100%; /* Abre para baixo */
+        right: 0;   /* Alinhado à direita */
+        width: 250px;
+        background: white;
+        color: black; /* Texto preto dentro do popup */
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        padding: 15px;
+        z-index: 1000;
+        text-align: left;
     }}
-    .profile-container:hover .profile-popup {{ display: block; }}
+    .top-profile-container:hover .top-profile-popup {{ display: block; }}
+    
+    /* Ajuste fino para o menu horizontal ficar transparente na barra */
+    [data-testid="stHorizontalBlock"] .st-emotion-cache-1ybti6c {{
+        background-color: transparent !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
 # --- LÓGICA DE SESSÃO ---
 if 'user_info' not in st.session_state: st.session_state['user_info'] = None
 
-# --- TELA DE LOGIN ---
+# --- TELA DE LOGIN (Centralizada) ---
 if not st.session_state['user_info']:
-    # Layout de colunas para centralizar o card
     col_esq, col_centro, col_dir = st.columns([1, 1.2, 1])
-    
     with col_centro:
-        st.write("") # Espaço
+        st.write("")
         with st.container(border=True):
-            
-            # --- LOGO E TÍTULO CENTRALIZADOS ---
             st.markdown(f"""
                 <div style="text-align: center; padding-bottom: 20px;">
                     <img src="{LOGO_URL}" width="80" style="margin-bottom: 10px;">
@@ -218,257 +233,202 @@ if not st.session_state['user_info']:
                 </div>
             """, unsafe_allow_html=True)
             
-            # ABAS CENTRALIZADAS
             tab1, tab2 = st.tabs(["🔐 ENTRAR", "📝 CRIAR CONTA"])
             
             with tab1:
                 with st.form("login_email"):
                     email_login = st.text_input("E-mail")
                     senha_login = st.text_input("Senha", type="password")
-                    
                     if st.form_submit_button("ACESSAR SISTEMA", use_container_width=True):
-                        # 1. Checa Admin Mestre (via Secrets)
-                        try:
-                            s_mestra = st.secrets["SENHA_SISTEMA"]
+                        try: s_mestra = st.secrets["SENHA_SISTEMA"]
                         except: s_mestra = "admin"
-                        
-                        # LOGIN DE ADMIN (E-MAIL FIXO)
                         if email_login.lower() == "admin@escola.com" and senha_login == s_mestra:
-                             st.session_state['user_info'] = {
-                                 "username": "Super Admin", "name": "Administrador Geral", 
-                                 "role": "admin", "email": "admin@escola.com", "unit": "DIRETORIA"
-                             }
+                             st.session_state['user_info'] = {"username": "Super Admin", "name": "Administrador Geral", "role": "admin", "email": "admin@escola.com", "unit": "DIRETORIA"}
                              st.rerun()
-                        
-                        # 2. Checa Banco de Usuários (JSON)
                         db, _ = carregar_json(ARQ_USERS)
                         users = db.get("users", [])
-                        
-                        # Busca usuário pelo EMAIL
                         found = next((x for x in users if x.get('email', '').lower() == email_login.lower() and x['password'] == hash_senha(senha_login)), None)
-                        
                         if found:
                             if found.get('status') == 'active':
                                 st.session_state['user_info'] = found
                                 st.rerun()
-                            else: st.warning("🔒 Conta em análise. Aguarde aprovação.")
+                            else: st.warning("🔒 Conta em análise.")
                         else: st.error("❌ E-mail ou senha incorretos.")
 
             with tab2:
                 with st.form("registro"):
-                    st.caption("Preencha para solicitar acesso:")
                     nome_reg = st.text_input("Nome Completo")
                     email_reg = st.text_input("E-mail Pessoal")
                     senha_reg = st.text_input("Crie uma Senha", type="password")
-                    
                     if st.form_submit_button("SOLICITAR CADASTRO", use_container_width=True):
-                        if not email_reg or "@" not in email_reg:
-                            st.error("Digite um e-mail válido.")
+                        if not email_reg or "@" not in email_reg: st.error("E-mail inválido.")
                         else:
                             db, sha = carregar_json(ARQ_USERS)
                             lst = db.get("users", [])
-                            
-                            # Verifica se email já existe
-                            if any(x.get('email', '').lower() == email_reg.lower() for x in lst):
-                                st.error("⚠️ Este e-mail já possui cadastro.")
+                            if any(x.get('email', '').lower() == email_reg.lower() for x in lst): st.error("E-mail já cadastrado.")
                             else:
-                                with st.spinner("Enviando solicitação..."):
-                                    # Cria novo usuário
-                                    novo_user = {
-                                        "username": email_reg.split("@")[0],
-                                        "password": hash_senha(senha_reg),
-                                        "name": nome_reg,
-                                        "email": email_reg,
-                                        "role": "user",
-                                        "status": "pending",
-                                        "unit": "PADRÃO"
-                                    }
-                                    
-                                    lst.append(novo_user)
+                                with st.spinner("Enviando..."):
+                                    lst.append({"username": email_reg.split("@")[0], "password": hash_senha(senha_reg), "name": nome_reg, "email": email_reg, "role": "user", "status": "pending", "unit": "PADRÃO"})
                                     if not db: db = {"users": []}
                                     db['users'] = lst
                                     salvar_json(ARQ_USERS, db, sha, f"Novo registro: {email_reg}")
-                                    
                                     sucesso, msg_erro = enviar_email_boas_vindas(email_reg, nome_reg)
-                                    
-                                    if sucesso:
-                                        st.success(f"✅ Solicitação enviada! Verifique seu e-mail: {email_reg}")
-                                    else:
-                                        st.warning(f"⚠️ Salvo, mas erro no envio de e-mail: {msg_erro}")
+                                    if sucesso: st.success(f"✅ Solicitação enviada para: {email_reg}")
+                                    else: st.warning(f"⚠️ Salvo, erro no e-mail: {msg_erro}")
     st.stop()
 
-# --- ÁREA LOGADA ---
+# ==============================================================================
+# ÁREA LOGADA COM BARRA SUPERIOR (NAVBAR)
+# ==============================================================================
 user = st.session_state['user_info']
 
-# Sidebar
-with st.sidebar:
-    st.image(LOGO_URL, width=90)
-    st.markdown(f"""
-    <div class="profile-container">
-        <small>Logado como:</small><br>
-        <strong>{user['name']}</strong>
-        <div class="profile-popup">
-            <strong>E-mail:</strong> {user.get('email')}<br>
-            <strong>Nível:</strong> <span style="color:{COR_TEMA}">{user['role'].upper()}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# --- CONSTRUÇÃO DA BARRA SUPERIOR ---
+# Usamos um container com cor de fundo para simular a barra, e colunas dentro.
+with st.container():
+    # Injeta o estilo do container da navbar
+    st.markdown(f'<div class="top-navbar-container">', unsafe_allow_html=True)
     
-    from streamlit_option_menu import option_menu
-    opts = ["Dashboard", "Pesquisar", "Cadastrar Aluno"]
-    icons = ["house", "search", "person-plus"]
-    if user['role'] == 'admin':
-        opts.append("Administração"); icons.append("gear")
+    # Divide a barra em 3 partes: [Logo/Titulo] [Menu Horizontal] [Perfil]
+    nav_col1, nav_col2, nav_col3 = st.columns([1.5, 3, 1.2])
     
-    menu = option_menu("Navegação", opts, icons=icons, default_index=0)
-    st.divider()
-    if st.button("🔒 Sair do Sistema", use_container_width=True):
-        st.session_state['user_info'] = None
-        st.rerun()
+    with nav_col1:
+        # Logo e Título na esquerda (texto branco)
+        st.markdown(f"""
+            <div style="display: flex; align-items: center;">
+                <img src="{LOGO_URL}" width="40" style="margin-right: 10px;">
+                <h4 style="margin: 0; color: white; font-weight: 700; white-space: nowrap;">{NOME_ESCOLA}</h4>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    with nav_col2:
+        # Menu Horizontal no centro
+        opts = ["Dashboard", "Pesquisar", "Cadastrar Aluno"]
+        icons = ["house", "search", "person-plus"]
+        if user['role'] == 'admin':
+            opts.append("Administração"); icons.append("gear")
+            
+        # Estilo personalizado para o menu ficar transparente e com texto branco
+        menu = option_menu(None, opts, icons=icons, default_index=0, orientation="horizontal",
+                           styles={
+                               "container": {"padding": "0!important", "background-color": "transparent"},
+                               "icon": {"color": "white", "font-size": "14px"}, 
+                               "nav-link": {"color": "white", "font-size": "14px", "text-align": "center", "margin":"0px", "--hover-color": "rgba(255,255,255,0.2)"},
+                               "nav-link-selected": {"background-color": "rgba(255,255,255,0.3)"},
+                           })
 
-# --- LÓGICA DE DADOS ---
+    with nav_col3:
+        # Perfil e Logout na direita
+        # O botão de sair agora fica dentro do popup do perfil para economizar espaço
+        html_perfil_top = f"""
+        <div class="top-profile-container">
+            <div style="text-align: right; margin-right: 10px;">
+                <small>Olá,</small><br><strong>{user['name'].split()[0]}</strong>
+            </div>
+            <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" width="35" style="border-radius: 50%; border: 2px solid white;">
+            
+            <div class="top-profile-popup">
+                <div style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
+                    <strong>{user['name']}</strong><br>
+                    <small>{user.get('email')}</small><br>
+                    <span style="color:{COR_TEMA}; font-weight:bold;">{user['role'].upper()}</span>
+                </div>
+                </div>
+        </div>
+        """
+        st.markdown(html_perfil_top, unsafe_allow_html=True)
+        
+        # Botão de sair invisível que é ativado pelo CSS do popup (truque para usar st.button)
+        with st.container():
+             if st.button("🔒 Sair do Sistema", key="top_logout_btn", use_container_width=True):
+                 st.session_state['user_info'] = None
+                 st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True) # Fecha container da navbar
+
+# --- LÓGICA DE DADOS E TELAS (Conteúdo principal abaixo da barra) ---
 if menu in ["Dashboard", "Pesquisar"]:
     df = pd.DataFrame(carregar_dados_word())
 
-# --- TELAS ---
-
 if menu == "Administração":
-    # DESIGN PREMIUM DO ADMIN
     st.markdown(f"## ⚙️ Administração do Sistema")
-    st.info("Painel de controle de usuários e configurações.")
-    
-    tab_u, tab_p, tab_c = st.tabs(["👥 Gestão de Usuários", "🔑 Alterar Senhas", "🎨 Aparência"])
-    
-    # TAB 1: GESTÃO
+    tab_u, tab_p, tab_c = st.tabs(["👥 Usuários", "🔑 Alterar Senhas", "🎨 Aparência"])
     with tab_u:
         db, sha = carregar_json(ARQ_USERS)
         users_list = db.get("users", [])
-        
         if users_list:
-            # Métricas
             col_m1, col_m2 = st.columns(2)
-            total_users = len(users_list)
-            pending_users = len([u for u in users_list if u.get('status') == 'pending'])
-            
-            col_m1.metric("Total de Usuários", total_users)
-            col_m2.metric("Pendentes de Aprovação", pending_users, delta_color="inverse")
-            
-            st.markdown("### Tabela de Usuários")
+            col_m1.metric("Total", len(users_list))
+            col_m2.metric("Pendentes", len([u for u in users_list if u.get('status') == 'pending']))
             
             df_users = pd.DataFrame(users_list)
-            cols_to_show = ["name", "email", "status", "role", "unit"]
-            df_display = df_users[[c for c in cols_to_show if c in df_users.columns]]
-            
-            edited = st.data_editor(
-                df_display,
-                key="user_editor",
-                use_container_width=True,
-                column_config={
-                    "name": "Nome",
-                    "email": "E-mail (Login)",
-                    "status": st.column_config.SelectboxColumn("Status", options=["active", "pending", "disabled"]),
-                    "role": st.column_config.SelectboxColumn("Nível", options=["user", "admin"]),
-                    "unit": "Unidade"
-                }
-            )
-            
-            if st.button("💾 Salvar Alterações de Status/Permissão"):
-                novos_dados = edited.to_dict('records')
-                lista_atualizada = []
-                for novo in novos_dados:
-                    original = next((u for u in users_list if u.get('email') == novo['email']), None)
-                    if original:
-                        original.update(novo)
-                        lista_atualizada.append(original)
-                    else:
-                        lista_atualizada.append(novo)
-                
-                db['users'] = lista_atualizada
-                salvar_json(ARQ_USERS, db, sha, "Admin atualizou usuários")
-                st.success("✅ Banco de dados atualizado com sucesso!")
-                time.sleep(1.5); st.rerun()
-
-    # TAB 2: ALTERAR SENHAS
+            cols = ["name", "email", "status", "role", "unit"]
+            df_display = df_users[[c for c in cols if c in df_users.columns]]
+            edited = st.data_editor(df_display, key="user_ed", use_container_width=True,
+                column_config={"status": st.column_config.SelectboxColumn("Status", options=["active", "pending", "disabled"]),
+                               "role": st.column_config.SelectboxColumn("Nível", options=["user", "admin"])})
+            if st.button("💾 Salvar Status"):
+                novos = edited.to_dict('records')
+                lista_atual = []
+                for novo in novos:
+                    orig = next((u for u in users_list if u.get('email') == novo['email']), None)
+                    if orig: orig.update(novo); lista_atual.append(orig)
+                    else: lista_atual.append(novo)
+                db['users'] = lista_atual
+                salvar_json(ARQ_USERS, db, sha, "Update users"); st.success("Salvo!"); time.sleep(1); st.rerun()
     with tab_p:
-        st.markdown("### 🔐 Redefinir Senha de Usuário")
-        st.warning("Use esta área para trocar a senha de um usuário que esqueceu.")
-        
+        st.markdown("### 🔐 Redefinir Senha")
         db, sha = carregar_json(ARQ_USERS)
-        users_list = db.get("users", [])
-        
-        emails = [u.get('email') for u in users_list]
-        user_selecionado = st.selectbox("Selecione o Usuário para alterar a senha:", [""] + emails)
-        
-        if user_selecionado:
-            nova_senha_admin = st.text_input(f"Nova Senha para {user_selecionado}", type="password")
-            confirmar_senha = st.text_input("Confirme a Nova Senha", type="password")
-            
-            if st.button("Confirmar Alteração de Senha"):
-                if nova_senha_admin and nova_senha_admin == confirmar_senha:
-                    for u in users_list:
-                        if u.get('email') == user_selecionado:
-                            u['password'] = hash_senha(nova_senha_admin)
-                            break
-                    db['users'] = users_list
-                    if salvar_json(ARQ_USERS, db, sha, f"Admin alterou senha de {user_selecionado}"):
-                        st.success(f"✅ Senha de {user_selecionado} alterada com sucesso!")
-                    else:
-                        st.error("Erro ao salvar.")
-                else:
-                    st.error("As senhas não coincidem ou estão vazias.")
-
-    # TAB 3: CONFIGURAÇÃO
+        ul = db.get("users", [])
+        emails = [u.get('email') for u in ul]
+        us = st.selectbox("Usuário:", [""] + emails)
+        if us:
+            ns = st.text_input("Nova Senha", type="password")
+            cs = st.text_input("Confirme", type="password")
+            if st.button("Alterar Senha"):
+                if ns and ns == cs:
+                    for u in ul:
+                        if u.get('email') == us: u['password'] = hash_senha(ns); break
+                    db['users'] = ul
+                    salvar_json(ARQ_USERS, db, sha, f"Senha alterada {us}"); st.success("Senha alterada!")
+                else: st.error("Senhas não conferem.")
     with tab_c:
         st.markdown("### 🎨 Personalização")
-        with st.form("conf_form"):
-            cn = st.text_input("Nome da Escola", NOME_ESCOLA)
-            cc = st.color_picker("Cor Principal (Tema)", COR_TEMA)
-            cl = st.text_input("URL da Logo", LOGO_URL)
-            
-            if st.form_submit_button("Aplicar Novo Design"):
+        with st.form("conf"):
+            cn = st.text_input("Nome Escola", NOME_ESCOLA)
+            cc = st.color_picker("Cor Tema", COR_TEMA)
+            cl = st.text_input("URL Logo", LOGO_URL)
+            if st.form_submit_button("Aplicar"):
                 _, s_c = carregar_json(ARQ_CONFIG)
                 salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, s_c, "Update config")
-                st.toast("Design atualizado! Atualizando página..."); time.sleep(2); st.rerun()
+                st.toast("Atualizando..."); time.sleep(2); st.rerun()
 
 elif menu == "Dashboard":
     st.markdown(f"## 📊 Visão Geral")
     if not df.empty:
-        col1, col2, col3 = st.columns(3)
-        with col1: st.metric("Total de Alunos", len(df))
-        with col2: st.metric("Concluintes", len(df[df['Categoria']=="Concluinte"]))
-        with col3: st.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
-        
-        st.markdown("### Últimos Cadastros")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total", len(df)); c2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"])); c3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
         st.dataframe(df.tail(5), use_container_width=True, hide_index=True)
-    else:
-        st.info("Nenhum aluno encontrado na base de dados.")
+    else: st.info("Sem dados.")
 
 elif menu == "Pesquisar":
     st.markdown("## 🔍 Consultar Aluno")
-    busca = st.text_input("Nome do Aluno", placeholder="Digite para buscar...")
+    busca = st.text_input("Busca por nome...")
     if busca and not df.empty:
         res = df[df['Nome'].str.contains(busca.upper(), na=False)]
-        if not res.empty:
-            st.success(f"{len(res)} alunos encontrados.")
-            st.dataframe(res, use_container_width=True, hide_index=True)
-        else: st.warning("Nenhum aluno encontrado.")
-    elif not busca: st.info("Digite o nome acima para ver os resultados.")
+        if not res.empty: st.success(f"{len(res)} encontrados."); st.dataframe(res, use_container_width=True, hide_index=True)
+        else: st.warning("Não encontrado.")
 
 elif menu == "Cadastrar Aluno":
     st.markdown("## 📝 Novo Aluno")
     with st.container(border=True):
-        with st.form("novo_aluno"):
+        with st.form("novo"):
             c1, c2 = st.columns([1,4])
-            num = c1.text_input("Nº (Ex: 105)")
-            nome = c2.text_input("Nome Completo")
-            tipo = st.radio("Lista de Destino", ["Passivos", "Concluintes"], horizontal=True)
-            obs = st.text_input("Observação")
-            
-            if st.form_submit_button("💾 SALVAR ALUNO NO SISTEMA", use_container_width=True):
+            num = c1.text_input("Nº")
+            nome = c2.text_input("Nome")
+            tipo = st.radio("Destino", ["Passivos", "Concluintes"], horizontal=True)
+            obs = st.text_input("Obs")
+            if st.form_submit_button("💾 SALVAR"):
                 arq = ARQ_PASSIVOS if tipo == "Passivos" else ARQ_CONCLUINTES
                 if not num: num = "S/N"
-                if salvar_aluno_word(arq, num, nome, obs):
-                    st.balloons()
-                    st.success(f"✅ Aluno {nome} salvo com sucesso!")
-                    time.sleep(1); st.cache_data.clear(); st.rerun()
-                else: st.error("Erro ao salvar no GitHub.")
+                if salvar_aluno_word(arq, num, nome, obs): st.balloons(); st.success("Salvo!"); time.sleep(1); st.cache_data.clear(); st.rerun()
+                else: st.error("Erro ao salvar.")
