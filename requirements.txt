@@ -2,3 +2,5 @@ streamlit
 pandas
 python-docx
 PyGithub
+plotly
+streamlit-option-menu
