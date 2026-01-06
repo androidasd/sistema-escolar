@@ -22,6 +22,9 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         remetente = st.secrets["EMAIL_USER"]
         senha_app = st.secrets["EMAIL_PASSWORD"]
         
+        # Remove espaços da senha caso o usuário tenha deixado
+        senha_app = senha_app.replace(" ", "")
+        
         # Cria a mensagem
         msg = MIMEMultipart()
         msg['From'] = remetente
@@ -50,10 +53,10 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         server.login(remetente, senha_app)
         server.sendmail(remetente, destinatario, msg.as_string())
         server.quit()
-        return True
+        return True, "Enviado"
     except Exception as e:
-        print(f"Erro ao enviar e-mail: {e}")
-        return False
+        # Retorna o erro exato para mostrar na tela
+        return False, str(e)
 
 # --- CONEXÃO GITHUB ---
 try:
@@ -223,7 +226,7 @@ if not st.session_state['user_info']:
                 lst = db.get("users", [])
                 if any(x['username'] == nu for x in lst): st.error("Usuário já existe.")
                 else:
-                    with st.spinner("Registrando e enviando e-mail..."):
+                    with st.spinner("Registrando..."):
                         # Salva no Banco JSON
                         lst.append({"username": nu, "password": hash_senha(ns), "name": nn, "email": ne, "role": "user", "status": "pending", "unit": "PADRÃO"})
                         if not db: db = {"users": []}
@@ -231,12 +234,13 @@ if not st.session_state['user_info']:
                         salvar_json(ARQ_USERS, db, sha, f"Novo user {nu}")
                         
                         # Tenta enviar Email
-                        enviou = enviar_email_boas_vindas(ne, nu)
+                        sucesso, mensagem_erro = enviar_email_boas_vindas(ne, nu)
                         
-                        if enviou:
+                        if sucesso:
                             st.success(f"✅ Sucesso! Um e-mail foi enviado para {ne}.")
                         else:
-                            st.warning("✅ Cadastro salvo, mas houve erro ao enviar o e-mail (verifique se a Senha de App está correta nos Secrets).")
+                            st.warning(f"⚠️ Cadastro SALVO, mas erro no e-mail: {mensagem_erro}")
+                            st.info("Dica: Verifique se o e-mail no Secrets é o mesmo que gerou a senha.")
     st.stop()
 
 # --- SISTEMA LOGADO (DASHBOARD) ---
