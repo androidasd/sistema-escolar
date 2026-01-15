@@ -17,7 +17,7 @@ ST_TITULO_PADRAO = "SISTEMA ESCOLAR"
 
 st.set_page_config(page_title=ST_TITULO_PADRAO, page_icon="🎓", layout="wide")
 
-# --- CSS NUCLEAR (SOLUÇÃO DEFINITIVA) ---
+# --- CSS NUCLEAR (MANTER O VISUAL LIMPO) ---
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
@@ -96,7 +96,7 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
 # --- CONEXÃO GITHUB ---
 try:
     TOKEN = st.secrets["GITHUB_TOKEN"]
-    g = Github(TOKEN) # Método antigo que funciona (ignorar aviso amarelo)
+    g = Github(TOKEN) 
     
     user = g.get_user()
     repo_ref = None
@@ -116,6 +116,7 @@ except Exception as e:
     st.stop()
 
 # --- ARQUIVOS ---
+# Verifique se os nomes abaixo estão EXATAMENTE iguais aos do seu GitHub
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
 ARQ_CONCLUINTES = 'CONCLUINTES- PA-RESSACA.docx'
 ARQ_USERS = 'users.json'
@@ -139,9 +140,20 @@ def salvar_json(arquivo, dados, sha, mensagem):
 @st.cache_data(ttl=60)
 def carregar_dados_word():
     lista = []
+    
+    # Função auxiliar para listar arquivos se der erro
+    def listar_arquivos_disponiveis():
+        try:
+            arquivos = repo_ref.get_contents("")
+            nomes = [f.name for f in arquivos]
+            return nomes
+        except:
+            return ["Erro ao listar arquivos"]
+
     def processar(nome_arq, categoria):
         local = []
         try:
+            # Tenta pegar o arquivo
             c = repo_ref.get_contents(nome_arq)
             doc = Document(io.BytesIO(c.decoded_content))
             for tabela in doc.tables:
@@ -154,8 +166,15 @@ def carregar_dados_word():
                             local.append({"Numero": num, "Nome": nome, "Categoria": categoria, "Obs": obs})
             return local
         except Exception as e:
-            # Mostra erro se falhar leitura
-            print(f"Erro lendo {nome_arq}: {e}")
+            # --- DIAGNÓSTICO DE ERRO ---
+            st.warning(f"⚠️ Não consegui ler o arquivo: **{nome_arq}**")
+            st.caption(f"Motivo do erro: {str(e)}")
+            
+            # Mostra quais arquivos existem de verdade
+            if "Not Found" in str(e) or "404" in str(e):
+                disponiveis = listar_arquivos_disponiveis()
+                st.info(f"📂 Arquivos encontrados no seu GitHub: {disponiveis}")
+                st.error("☝️ Verifique se o nome do arquivo no código bate com a lista acima (letras maiúsculas importam!).")
             return []
             
     l1 = processar(ARQ_PASSIVOS, "Passivo")
@@ -211,8 +230,8 @@ if not st.session_state['user_info']:
                         try: s_adm = st.secrets["SENHA_SISTEMA"]
                         except: s_adm = "admin"
                         # Login Admin
-                        if email.lower() == "admin@emeifparessaca.com" and senha == s_adm:
-                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@emeifparessaca.com", "unit": "DIRETORIA"}
+                        if email.lower() == "admin@gmail.com" and senha == s_adm:
+                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@gmail.com", "unit": "DIRETORIA"}
                             st.rerun()
                         # Login Normal
                         db, _ = carregar_json(ARQ_USERS)
@@ -266,7 +285,7 @@ with st.container():
 
 st.divider()
 
-# --- MENU HORIZONTAL (CORREÇÃO DE SINTAXE AQUI) ---
+# --- MENU HORIZONTAL ---
 opts = ["Dashboard", "Pesquisar", "Cadastrar Aluno"]
 icons = ["house", "search", "person-plus"]
 
@@ -302,7 +321,11 @@ if selected == "Dashboard":
         st.write("")
         st.markdown("##### 📌 Últimas Atualizações")
         st.dataframe(df.tail(8), use_container_width=True, hide_index=True)
-    else: st.info("Sem dados. Verifique a conexão com o GitHub ou se os arquivos existem.")
+    else: 
+        # MENSAGEM DE ERRO/DIAGNÓSTICO AMIGÁVEL
+        st.info("Nenhum dado carregado.")
+        st.markdown("---")
+        st.write("Se você está vendo um aviso amarelo acima, siga as instruções dele para corrigir o nome do arquivo.")
 
 elif selected == "Pesquisar":
     st.subheader("🔍 Buscar Aluno")
@@ -374,4 +397,3 @@ elif selected == "Administração":
             if st.form_submit_button("Salvar"):
                 _, s_c = carregar_json(ARQ_CONFIG)
                 salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, s_c, "Upd Config"); st.rerun()
-
