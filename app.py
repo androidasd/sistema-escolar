@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from docx import Document
-from github import Github
+from github import Github, Auth
 import io
 import time
 import json
@@ -96,13 +96,16 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
 # --- CONEXÃO GITHUB ---
 try:
     TOKEN = st.secrets["GITHUB_TOKEN"]
-    g = Github(TOKEN) 
+    # Autenticação atualizada
+    auth = Auth.Token(TOKEN)
+    g = Github(auth=auth)
     
     user = g.get_user()
     repo_ref = None
     for repo in user.get_repos():
         if "sistema" in repo.name.lower() or "escolar" in repo.name.lower() or "emeif" in repo.name.lower():
             repo_ref = repo; break
+            
     if not repo_ref: 
         repos = list(user.get_repos()) 
         if repos: repo_ref = repos[0]
@@ -115,46 +118,56 @@ except Exception as e:
     st.error(f"Erro de conexão com GitHub: {e}") 
     st.stop()
 
-# --- ARQUIVOS ---
-# Verifique se os nomes abaixo estão EXATAMENTE iguais aos do seu GitHub
+# --- ARQUIVOS (NOMES CORRIGIDOS BASEADOS NO SEU GITHUB) ---
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
-ARQ_CONCLUINTES = 'CONCLUINTES- PA-RESSACA.docx'
-ARQ_USERS = 'users.json'
+ARQ_CONCLUINTES = 'CONCLUSÕES- PA-RESSACA.docx' # Corrigido conforme sua imagem
+ARQ_USERS = 'usuários.json'                   # Corrigido conforme sua imagem
 ARQ_CONFIG = 'config.json'
+
+# --- CONFIGURAÇÃO DA BRANCH (RAMIFICAÇÃO) ---
+# Sua imagem mostra que os arquivos estão na branch 'principal'
+BRANCH_NAME = "principal"
 
 # --- MANIPULAÇÃO DADOS ---
 def carregar_json(arquivo):
     try:
-        content = repo_ref.get_contents(arquivo)
+        # Força leitura da branch 'principal'
+        content = repo_ref.get_contents(arquivo, ref=BRANCH_NAME)
         return json.loads(content.decoded_content.decode()), content.sha
-    except: return {}, None
+    except:
+        # Tenta fallback se der erro (branch padrão)
+        try:
+            content = repo_ref.get_contents(arquivo)
+            return json.loads(content.decoded_content.decode()), content.sha
+        except:
+            return {}, None
 
 def salvar_json(arquivo, dados, sha, mensagem):
     try:
         dados_str = json.dumps(dados, indent=4)
-        if sha: repo_ref.update_file(arquivo, mensagem, dados_str, sha)
-        else: repo_ref.create_file(arquivo, mensagem, dados_str)
+        if sha: repo_ref.update_file(arquivo, mensagem, dados_str, sha, branch=BRANCH_NAME)
+        else: repo_ref.create_file(arquivo, mensagem, dados_str, branch=BRANCH_NAME)
         return True
-    except: return False
+    except:
+        try:
+            if sha: repo_ref.update_file(arquivo, mensagem, dados_str, sha)
+            else: repo_ref.create_file(arquivo, mensagem, dados_str)
+            return True
+        except: return False
 
 @st.cache_data(ttl=60)
 def carregar_dados_word():
     lista = []
     
-    # Função auxiliar para listar arquivos se der erro
-    def listar_arquivos_disponiveis():
-        try:
-            arquivos = repo_ref.get_contents("")
-            nomes = [f.name for f in arquivos]
-            return nomes
-        except:
-            return ["Erro ao listar arquivos"]
-
     def processar(nome_arq, categoria):
         local = []
         try:
-            # Tenta pegar o arquivo
-            c = repo_ref.get_contents(nome_arq)
+            # Tenta ler da branch 'principal'
+            try:
+                c = repo_ref.get_contents(nome_arq, ref=BRANCH_NAME)
+            except:
+                c = repo_ref.get_contents(nome_arq) # Tenta padrão
+                
             doc = Document(io.BytesIO(c.decoded_content))
             for tabela in doc.tables:
                 for linha in tabela.rows:
@@ -166,15 +179,8 @@ def carregar_dados_word():
                             local.append({"Numero": num, "Nome": nome, "Categoria": categoria, "Obs": obs})
             return local
         except Exception as e:
-            # --- DIAGNÓSTICO DE ERRO ---
-            st.warning(f"⚠️ Não consegui ler o arquivo: **{nome_arq}**")
-            st.caption(f"Motivo do erro: {str(e)}")
-            
-            # Mostra quais arquivos existem de verdade
-            if "Not Found" in str(e) or "404" in str(e):
-                disponiveis = listar_arquivos_disponiveis()
-                st.info(f"📂 Arquivos encontrados no seu GitHub: {disponiveis}")
-                st.error("☝️ Verifique se o nome do arquivo no código bate com a lista acima (letras maiúsculas importam!).")
+            # Mostra o erro exato na tela se falhar
+            st.error(f"Erro ao ler '{nome_arq}': {e}")
             return []
             
     l1 = processar(ARQ_PASSIVOS, "Passivo")
@@ -183,7 +189,11 @@ def carregar_dados_word():
 
 def salvar_aluno_word(arquivo_nome, numero, nome, obs):
     try:
-        c = repo_ref.get_contents(arquivo_nome)
+        try:
+            c = repo_ref.get_contents(arquivo_nome, ref=BRANCH_NAME)
+        except:
+            c = repo_ref.get_contents(arquivo_nome)
+            
         doc = Document(io.BytesIO(c.decoded_content))
         if len(doc.tables) > 0:
             tab = doc.tables[0]
@@ -193,7 +203,11 @@ def salvar_aluno_word(arquivo_nome, numero, nome, obs):
             if len(row.cells) > 2: row.cells[2].text = obs
             buffer = io.BytesIO()
             doc.save(buffer)
-            repo_ref.update_file(arquivo_nome, f"Add Aluno: {nome}", buffer.getvalue(), c.sha)
+            
+            try:
+                repo_ref.update_file(arquivo_nome, f"Add Aluno: {nome}", buffer.getvalue(), c.sha, branch=BRANCH_NAME)
+            except:
+                repo_ref.update_file(arquivo_nome, f"Add Aluno: {nome}", buffer.getvalue(), c.sha)
             return True
     except: return False
 
@@ -322,10 +336,7 @@ if selected == "Dashboard":
         st.markdown("##### 📌 Últimas Atualizações")
         st.dataframe(df.tail(8), use_container_width=True, hide_index=True)
     else: 
-        # MENSAGEM DE ERRO/DIAGNÓSTICO AMIGÁVEL
-        st.info("Nenhum dado carregado.")
-        st.markdown("---")
-        st.write("Se você está vendo um aviso amarelo acima, siga as instruções dele para corrigir o nome do arquivo.")
+        st.info("Nenhum dado encontrado nos arquivos. Verifique se os arquivos Word têm tabelas preenchidas.")
 
 elif selected == "Pesquisar":
     st.subheader("🔍 Buscar Aluno")
@@ -347,6 +358,7 @@ elif selected == "Cadastrar Aluno":
             obs = c4.text_input("Observação")
             st.write("")
             if st.form_submit_button("💾 SALVAR ALUNO", use_container_width=True):
+                # Correção na lógica de escolha do arquivo para salvar
                 arq = ARQ_PASSIVOS if tipo == "Passivos" else ARQ_CONCLUINTES
                 if not num: num = "S/N"
                 if salvar_aluno_word(arq, num, nome, obs): st.toast(f"Salvo!", icon="✅"); time.sleep(1); st.cache_data.clear(); st.rerun()
