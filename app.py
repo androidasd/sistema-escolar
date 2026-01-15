@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from docx import Document
-from github import Github
+from github import Github, Auth  # <--- Adicionado Auth aqui
 import io
 import time
 import json
@@ -136,10 +136,13 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         return True, "Enviado"
     except Exception as e: return False, str(e)
 
-# --- CONEXÃO GITHUB ---
+# --- CONEXÃO GITHUB (CORRIGIDA PARA NOVO PADRÃO) ---
 try:
     TOKEN = st.secrets["GITHUB_TOKEN"]
-    g = Github(TOKEN)
+    # Correção do DeprecationWarning: Usando Auth.Token
+    auth = Auth.Token(TOKEN)
+    g = Github(auth=auth)
+    
     user = g.get_user()
     repo_ref = None
     for repo in user.get_repos():
@@ -244,8 +247,8 @@ if not st.session_state['user_info']:
                         try: s_adm = st.secrets["SENHA_SISTEMA"]
                         except: s_adm = "admin"
                         # ADMIN: admin@gmail.com
-                        if email.lower() == "admin@emeifparessaca.com" and senha == s_adm:
-                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@emeifparessaca.com", "unit": "DIRETORIA"}
+                        if email.lower() == "admin@gmail.com" and senha == s_adm:
+                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@gmail.com", "unit": "DIRETORIA"}
                             st.rerun()
                         # USUARIOS NORMAIS
                         db, _ = carregar_json(ARQ_USERS)
