@@ -75,12 +75,16 @@ try:
     g = Github(auth=auth)
     user = g.get_user()
     
-    # Busca repositório
+    # Busca repositório de forma flexível
     NOME_REPO = "sistema-escolar"
-    try:
-        repo_ref = user.get_repo(NOME_REPO)
-    except:
-        repo_ref = None
+    repo_ref = None
+    
+    # Tenta achar exato primeiro
+    try: repo_ref = user.get_repo(NOME_REPO)
+    except: pass
+    
+    # Se não achar, procura na lista
+    if not repo_ref:
         for r in user.get_repos():
             if "sistema" in r.name.lower():
                 repo_ref = r; break
@@ -94,11 +98,11 @@ try:
 except Exception as e:
     st.error(f"Erro Github: {e}"); st.stop()
 
-# --- DETECTOR INTELIGENTE DE ARQUIVOS ---
-# O sistema vai procurar arquivos que CONTENHAM estas palavras
-KEYWORD_PASSIVOS = "PA-RESSACA" 
-KEYWORD_CONCLUINTES = "CONCLU"   # Pega Concluintes, Conclusões, Conclusão...
-KEYWORD_USERS = "json"           # Pega users.json ou usuários.json
+# --- DETECTOR INTELIGENTE DE ARQUIVOS (CORRIGIDO) ---
+# Removemos "RESSACA" da lista de Passivos para não confundir com o outro arquivo
+KEYWORD_PASSIVOS = ["EMEF", "PASSIVO"] 
+KEYWORD_CONCLUINTES = ["CONCLU"] 
+KEYWORD_USERS = ["json"]           
 
 def encontrar_arquivo_real(keyword_list, extensao):
     """Varre o GitHub e acha o nome verdadeiro do arquivo"""
@@ -112,12 +116,12 @@ def encontrar_arquivo_real(keyword_list, extensao):
     return None
 
 # Descobre os nomes reais agora
-NOME_REAL_PASSIVOS = encontrar_arquivo_real(["PASSIVO", "RESSACA", "EMEF"], ".docx")
-NOME_REAL_CONCLUINTES = encontrar_arquivo_real(["CONCLU"], ".docx")
-NOME_REAL_USERS = encontrar_arquivo_real(["USER", "USUÁRIO", "USUARIO"], ".json")
+NOME_REAL_PASSIVOS = encontrar_arquivo_real(KEYWORD_PASSIVOS, ".docx")
+NOME_REAL_CONCLUINTES = encontrar_arquivo_real(KEYWORD_CONCLUINTES, ".docx")
+NOME_REAL_USERS = encontrar_arquivo_real(KEYWORD_USERS, ".json")
 ARQ_CONFIG = 'config.json'
 
-# Se não achar o users, define um padrão (mas avisa no log)
+# Se não achar o users, define um padrão
 if not NOME_REAL_USERS: NOME_REAL_USERS = "users.json"
 
 # --- OPERAÇÕES DE ARQUIVO ---
@@ -137,11 +141,10 @@ def salvar_json(arquivo, dados, sha, mensagem):
 
 @st.cache_data(ttl=60)
 def carregar_dados_word():
-    lista_final = []
     
     def processar(nome_arq_real, categoria):
         local = []
-        if not nome_arq_real: return [] # Se não achou o arquivo, retorna vazio sem erro
+        if not nome_arq_real: return []
         
         try:
             c = repo_ref.get_contents(nome_arq_real, ref=BRANCH_ATUAL)
@@ -159,11 +162,9 @@ def carregar_dados_word():
             st.error(f"Erro lendo {nome_arq_real}: {e}")
             return []
             
-    # Usa os nomes descobertos automaticamente
     l1 = processar(NOME_REAL_PASSIVOS, "Passivo")
     l2 = processar(NOME_REAL_CONCLUINTES, "Concluinte")
     
-    # Se uma das listas estiver vazia, avisa discretamente
     if not l1 and not l2:
         st.warning("⚠️ Nenhum aluno encontrado. Verifique se os arquivos estão no GitHub.")
     
@@ -277,7 +278,7 @@ if selected == "Dashboard":
         col1.metric("Total", len(df)); col2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"])); col3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
         st.write(""); st.markdown("##### 📌 Últimas Atualizações")
         st.dataframe(df.tail(8), use_container_width=True, hide_index=True)
-    else: st.info("Carregando dados...")
+    else: st.info("Sem dados (Tabelas vazias ou não encontradas).")
 
 elif selected == "Pesquisar":
     st.subheader("🔍 Buscar Aluno")
@@ -298,11 +299,9 @@ elif selected == "Cadastrar Aluno":
             tipo = c3.radio("Situação", ["Passivos", "Concluintes"], horizontal=True)
             obs = c4.text_input("Obs")
             if st.form_submit_button("💾 SALVAR"):
-                # Usa a variável inteligente descoberta no início
                 arq_destino = NOME_REAL_PASSIVOS if tipo == "Passivos" else NOME_REAL_CONCLUINTES
-                
                 if not arq_destino:
-                    st.error("ERRO: O arquivo de destino não foi encontrado no GitHub. Verifique os nomes.")
+                    st.error("ERRO: Arquivo não encontrado.")
                 else:
                     if not num: num = "S/N"
                     if salvar_aluno_word(arq_destino, num, nome, obs): 
