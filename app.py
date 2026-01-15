@@ -17,7 +17,7 @@ ST_TITULO_PADRAO = "SISTEMA ESCOLAR"
 
 st.set_page_config(page_title=ST_TITULO_PADRAO, page_icon="🎓", layout="wide")
 
-# --- CSS NUCLEAR ---
+# --- CSS NUCLEAR (VISUAL LIMPO) ---
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
@@ -67,57 +67,55 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         return True, "Enviado"
     except Exception as e: return False, str(e)
 
-# --- CONEXÃO GITHUB (AGORA COM NOME EXATO DO REPOSITÓRIO) ---
+# --- CONEXÃO GITHUB INTELIGENTE ---
+BRANCH_ATUAL = "main" # Valor padrão inicial
 try:
     TOKEN = st.secrets["GITHUB_TOKEN"]
     auth = Auth.Token(TOKEN)
     g = Github(auth=auth)
     user = g.get_user()
     
-    # --- ALTERAÇÃO PRINCIPAL AQUI ---
-    # Em vez de adivinhar, pegamos o nome EXATO que estava na sua imagem
-    NOME_REPO_EXATO = "sistema-escolar"
-    
+    # 1. Tenta pegar o repositório pelo nome exato
+    NOME_REPO = "sistema-escolar"
     try:
-        repo_ref = user.get_repo(NOME_REPO_EXATO)
-        # Diagnóstico para você ver na tela se conectou certo
-        # st.toast(f"Conectado ao repositório: {repo_ref.full_name}", icon="✅") 
+        repo_ref = user.get_repo(NOME_REPO)
     except:
-        st.error(f"❌ Não encontrei o repositório exato '{NOME_REPO_EXATO}'.")
-        st.info("Tentando busca automática...")
+        # Se falhar, tenta achar na lista
         repo_ref = None
-        for repo in user.get_repos():
-            # Evita repositórios vazios verificando o tamanho se possível, ou apenas nome
-            if "sistema" in repo.name.lower() and repo.size > 0:
-                repo_ref = repo
+        for r in user.get_repos():
+            if "sistema" in r.name.lower():
+                repo_ref = r
                 break
-        if not repo_ref:
-            st.error("Nenhum repositório válido encontrado.")
-            st.stop()
+    
+    if not repo_ref:
+        st.error(f"❌ Repositório '{NOME_REPO}' não encontrado.")
+        st.stop()
+        
+    # 2. DETECÇÃO AUTOMÁTICA DA BRANCH (MAIN vs PRINCIPAL vs MASTER)
+    BRANCH_ATUAL = repo_ref.default_branch
 
 except Exception as e:
     st.error(f"Erro Github: {e}")
     st.stop()
 
-# --- ARQUIVOS E BRANCH ---
+# --- ARQUIVOS (NOMES EXATOS DA IMAGEM) ---
 ARQ_PASSIVOS = 'EMEF PA-RESSACA.docx'
 ARQ_CONCLUINTES = 'CONCLUSÕES- PA-RESSACA.docx'
 ARQ_USERS = 'usuários.json'
 ARQ_CONFIG = 'config.json'
-BRANCH_ALVO = "principal"
 
-# --- LEITURA DE DADOS ---
+# --- OPERAÇÕES DE ARQUIVO ---
 def carregar_json(arquivo):
     try:
-        content = repo_ref.get_contents(arquivo, ref=BRANCH_ALVO)
+        content = repo_ref.get_contents(arquivo, ref=BRANCH_ATUAL)
         return json.loads(content.decoded_content.decode()), content.sha
     except: return {}, None
 
 def salvar_json(arquivo, dados, sha, mensagem):
     try:
         dados_str = json.dumps(dados, indent=4)
-        if sha: repo_ref.update_file(arquivo, mensagem, dados_str, sha, branch=BRANCH_ALVO)
-        else: repo_ref.create_file(arquivo, mensagem, dados_str, branch=BRANCH_ALVO)
+        if sha: repo_ref.update_file(arquivo, mensagem, dados_str, sha, branch=BRANCH_ATUAL)
+        else: repo_ref.create_file(arquivo, mensagem, dados_str, branch=BRANCH_ATUAL)
         return True
     except: return False
 
@@ -126,7 +124,7 @@ def carregar_dados_word():
     def processar(nome_arq, categoria):
         local = []
         try:
-            c = repo_ref.get_contents(nome_arq, ref=BRANCH_ALVO)
+            c = repo_ref.get_contents(nome_arq, ref=BRANCH_ATUAL)
             doc = Document(io.BytesIO(c.decoded_content))
             for tabela in doc.tables:
                 for linha in tabela.rows:
@@ -144,7 +142,7 @@ def carregar_dados_word():
 
 def salvar_aluno_word(arquivo_nome, numero, nome, obs):
     try:
-        c = repo_ref.get_contents(arquivo_nome, ref=BRANCH_ALVO)
+        c = repo_ref.get_contents(arquivo_nome, ref=BRANCH_ATUAL)
         doc = Document(io.BytesIO(c.decoded_content))
         if len(doc.tables) > 0:
             tab = doc.tables[0]
@@ -154,7 +152,7 @@ def salvar_aluno_word(arquivo_nome, numero, nome, obs):
             if len(row.cells) > 2: row.cells[2].text = obs
             buffer = io.BytesIO()
             doc.save(buffer)
-            repo_ref.update_file(arquivo_nome, f"Add Aluno: {nome}", buffer.getvalue(), c.sha, branch=BRANCH_ALVO)
+            repo_ref.update_file(arquivo_nome, f"Add Aluno: {nome}", buffer.getvalue(), c.sha, branch=BRANCH_ATUAL)
             return True
     except: return False
 
@@ -176,7 +174,7 @@ if not st.session_state['user_info']:
                 <h3 style="color:{COR_TEMA}; margin:0; font-weight:700;">{NOME_ESCOLA}</h3>
                 <p style="color:gray; font-size:12px;">Gestão Acadêmica</p>
                 <hr style="opacity:0.2; margin: 15px 0;">
-                <small style="color: #999;">Repositório: {repo_ref.name if repo_ref else 'Desconectado'}</small>
+                <small style="color:#ddd; font-size:10px;">Branch: {BRANCH_ATUAL}</small>
             </div>
             """, unsafe_allow_html=True)
             
@@ -247,7 +245,7 @@ if selected == "Dashboard":
         col1.metric("Total", len(df)); col2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"])); col3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
         st.write(""); st.markdown("##### 📌 Últimas Atualizações")
         st.dataframe(df.tail(8), use_container_width=True, hide_index=True)
-    else: st.info("Sem dados. Verifique a conexão.")
+    else: st.info("Sem dados (Tabelas vazias ou não encontradas).")
 
 elif selected == "Pesquisar":
     st.subheader("🔍 Buscar Aluno")
