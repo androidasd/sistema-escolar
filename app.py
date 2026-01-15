@@ -20,100 +20,57 @@ st.set_page_config(page_title=ST_TITULO_PADRAO, page_icon="🎓", layout="wide")
 # --- CSS NUCLEAR (SOLUÇÃO DEFINITIVA) ---
 st.markdown("""
     <style>
-        /* Importa fonte */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
         html, body, [class*="css"] { font-family: 'Roboto', sans-serif; }
 
-        /* --- ZONA DE SUPRESSÃO TOTAL DO STREAMLIT --- */
-        
-        /* 1. Mata o cabeçalho nativo completamente e remove o espaço dele */
-        header {
-            visibility: hidden !important;
-            display: none !important;
-            height: 0px !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
-        }
-        
-        /* 2. Remove especificamente a barra de ferramentas e botões de deploy */
-        [data-testid="stToolbar"], 
-        [data-testid="stAppDeployButton"], 
-        [data-testid="stDecoration"],
-        [data-testid="stHeader"] {
-            visibility: hidden !important;
-            display: none !important;
-            height: 0px !important;
-        }
+        /* REMOVE CABEÇALHO E BARRAS DO STREAMLIT */
+        header { visibility: hidden !important; display: none !important; height: 0px !important; }
+        [data-testid="stToolbar"] { display: none !important; }
+        [data-testid="stAppDeployButton"] { display: none !important; }
+        [data-testid="stDecoration"] { display: none !important; }
+        footer, #MainMenu, .viewerBadge_container__1QSob { display: none !important; }
 
-        /* 3. Remove rodapé e menu */
-        footer, #MainMenu {
-            display: none !important;
-            visibility: hidden !important;
-        }
-        
-        /* 4. Remove o badge "Viewer" que as vezes aparece embaixo */
-        .viewerBadge_container__1QSob {
-            display: none !important;
-        }
-
-        /* 5. AJUSTE CRÍTICO: Sobe o conteúdo para tapar o buraco do header */
+        /* PUXA CONTEÚDO PARA CIMA */
         .block-container {
             padding-top: 0rem !important;
-            margin-top: -4rem !important; /* Puxa tudo para cima agressivamente */
+            margin-top: -4rem !important;
             padding-bottom: 2rem !important;
         }
         
-        /* --- ESTILOS DO SEU SISTEMA --- */
-        :root {
-            --primary: #00A8C6;
-            --card-bg: #ffffff;
-        }
+        /* ESTILOS VISUAIS */
+        :root { --primary: #00A8C6; --card-bg: #ffffff; }
 
-        /* Login Container Compacto */
+        /* Login */
         .login-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-            border: 1px solid #eee;
+            background: white; padding: 30px; border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid #eee;
             margin-top: 60px;
         }
 
         /* Botões */
         div.stButton > button:first-child {
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
+            background-color: var(--primary); color: white; border: none;
+            border-radius: 8px; font-weight: 600;
         }
         div.stButton > button:first-child:hover { opacity: 0.9; }
 
-        /* Cards de Métricas */
+        /* Cards */
         div[data-testid="metric-container"] {
-            background-color: var(--card-bg);
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            border-left: 5px solid var(--primary);
+            background-color: var(--card-bg); border-radius: 10px; padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid var(--primary);
             text-align: center;
         }
         
-        /* Popup do Perfil */
+        /* Popup Perfil */
         .profile-popup-box {
-            background-color: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            color: #333;
-            margin-top: 5px;
-            font-size: 14px;
+            background-color: white; border: 1px solid #ddd; border-radius: 8px;
+            padding: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            color: #333; margin-top: 5px; font-size: 14px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# --- FUNÇÕES ---
+# --- FUNÇÕES AUXILIARES ---
 def hash_senha(senha):
     return hashlib.sha256(str.encode(senha)).hexdigest()
 
@@ -136,11 +93,10 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         return True, "Enviado"
     except Exception as e: return False, str(e)
 
-# --- CONEXÃO GITHUB (REVERTIDA PARA FUNCIONAR) ---
+# --- CONEXÃO GITHUB ---
 try:
     TOKEN = st.secrets["GITHUB_TOKEN"]
-    # Voltamos ao método simples que funciona, mesmo com aviso no log
-    g = Github(TOKEN)
+    g = Github(TOKEN) # Método antigo que funciona (ignorar aviso amarelo)
     
     user = g.get_user()
     repo_ref = None
@@ -148,15 +104,15 @@ try:
         if "sistema" in repo.name.lower() or "escolar" in repo.name.lower() or "emeif" in repo.name.lower():
             repo_ref = repo; break
     if not repo_ref: 
-        repos = list(user.get_repos()); 
+        repos = list(user.get_repos()) 
         if repos: repo_ref = repos[0]
     
     if not repo_ref: 
-        st.error("Erro Crítico: Nenhum repositório encontrado na conta do GitHub."); 
+        st.error("Erro Crítico: Repositório não encontrado.")
         st.stop()
         
 except Exception as e: 
-    st.error(f"Erro de conexão com GitHub: {e}"); 
+    st.error(f"Erro de conexão com GitHub: {e}") 
     st.stop()
 
 # --- ARQUIVOS ---
@@ -198,8 +154,8 @@ def carregar_dados_word():
                             local.append({"Numero": num, "Nome": nome, "Categoria": categoria, "Obs": obs})
             return local
         except Exception as e:
-            # MOSTRA O ERRO NA TELA AO INVÉS DE ESCONDER
-            st.error(f"⚠️ Erro ao ler '{nome_arq}': {str(e)}")
+            # Mostra erro se falhar leitura
+            print(f"Erro lendo {nome_arq}: {e}")
             return []
             
     l1 = processar(ARQ_PASSIVOS, "Passivo")
@@ -231,11 +187,10 @@ LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3
 if 'user_info' not in st.session_state: st.session_state['user_info'] = None
 
 # ==============================================================================
-# TELA DE LOGIN (SUPER COMPACTA)
+# TELA DE LOGIN
 # ==============================================================================
 if not st.session_state['user_info']:
     col_e, col_c, col_d = st.columns([5, 3, 5])
-    
     with col_c:
         with st.container():
             st.markdown(f"""
@@ -248,7 +203,6 @@ if not st.session_state['user_info']:
             """, unsafe_allow_html=True)
             
             tab1, tab2 = st.tabs(["ENTRAR", "CADASTRAR"])
-            
             with tab1:
                 with st.form("login_frm"):
                     email = st.text_input("E-mail")
@@ -256,11 +210,11 @@ if not st.session_state['user_info']:
                     if st.form_submit_button("ACESSAR", use_container_width=True):
                         try: s_adm = st.secrets["SENHA_SISTEMA"]
                         except: s_adm = "admin"
-                        # ADMIN
-                        if email.lower() == "admin@emeifparessaca.com" and senha == s_adm:
-                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@emeifparessaca.com", "unit": "DIRETORIA"}
+                        # Login Admin
+                        if email.lower() == "admin@gmail.com" and senha == s_adm:
+                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@gmail.com", "unit": "DIRETORIA"}
                             st.rerun()
-                        # USUARIOS
+                        # Login Normal
                         db, _ = carregar_json(ARQ_USERS)
                         u = next((x for x in db.get("users", []) if x.get('email', '').lower() == email.lower() and x['password'] == hash_senha(senha)), None)
                         if u:
@@ -312,6 +266,111 @@ with st.container():
 
 st.divider()
 
-# --- MENU HORIZONTAL ---
+# --- MENU HORIZONTAL (CORREÇÃO DE SINTAXE AQUI) ---
 opts = ["Dashboard", "Pesquisar", "Cadastrar Aluno"]
-icons =
+icons = ["house", "search", "person-plus"]
+
+if user['role'] == 'admin':
+    opts.append("Administração")
+    icons.append("gear")
+
+selected = option_menu(
+    menu_title=None, 
+    options=opts, 
+    icons=icons, 
+    default_index=0, 
+    orientation="horizontal",
+    styles={
+        "container": {"padding": "0!important", "background-color": "#ffffff", "border-radius": "5px"},
+        "icon": {"color": COR_TEMA, "font-size": "15px"},
+        "nav-link": {"font-size": "14px", "text-align": "center", "margin": "0px", "--hover-color": "#f0f2f6"},
+        "nav-link-selected": {"background-color": COR_TEMA, "color": "white"},
+    }
+)
+st.write("")
+
+# --- PÁGINAS ---
+if selected in ["Dashboard", "Pesquisar"]: df = pd.DataFrame(carregar_dados_word())
+
+if selected == "Dashboard":
+    st.subheader("📊 Visão Geral")
+    if not df.empty:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total", len(df))
+        col2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"]))
+        col3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
+        st.write("")
+        st.markdown("##### 📌 Últimas Atualizações")
+        st.dataframe(df.tail(8), use_container_width=True, hide_index=True)
+    else: st.info("Sem dados. Verifique a conexão com o GitHub ou se os arquivos existem.")
+
+elif selected == "Pesquisar":
+    st.subheader("🔍 Buscar Aluno")
+    busca = st.text_input("Digite o nome...", placeholder="Ex: Maria da Silva")
+    if busca and not df.empty:
+        res = df[df['Nome'].str.contains(busca.upper(), na=False)]
+        if not res.empty: st.success(f"{len(res)} encontrados."); st.dataframe(res, use_container_width=True, hide_index=True)
+        else: st.warning("Não encontrado.")
+
+elif selected == "Cadastrar Aluno":
+    st.subheader("📝 Nova Matrícula")
+    with st.container():
+        with st.form("novo_aluno_form"):
+            c1, c2 = st.columns([1, 4])
+            num = c1.text_input("Nº Chamada", placeholder="000")
+            nome = c2.text_input("Nome Completo")
+            c3, c4 = st.columns(2)
+            tipo = c3.radio("Situação", ["Passivos", "Concluintes"], horizontal=True)
+            obs = c4.text_input("Observação")
+            st.write("")
+            if st.form_submit_button("💾 SALVAR ALUNO", use_container_width=True):
+                arq = ARQ_PASSIVOS if tipo == "Passivos" else ARQ_CONCLUINTES
+                if not num: num = "S/N"
+                if salvar_aluno_word(arq, num, nome, obs): st.toast(f"Salvo!", icon="✅"); time.sleep(1); st.cache_data.clear(); st.rerun()
+                else: st.error("Erro ao salvar.")
+
+elif selected == "Administração":
+    st.subheader("⚙️ Configurações")
+    tab_users, tab_pass, tab_config = st.tabs(["Usuários", "Senhas", "Sistema"])
+    
+    with tab_users:
+        db, sha = carregar_json(ARQ_USERS)
+        if db.get("users"):
+            users_df = pd.DataFrame(db['users'])
+            cols = ["name", "email", "status", "role"]
+            show_df = users_df[[c for c in cols if c in users_df.columns]]
+            edited = st.data_editor(show_df, key="editor_users", use_container_width=True,
+                column_config={"status": st.column_config.SelectboxColumn("Acesso", options=["active", "pending", "disabled"]),
+                               "role": st.column_config.SelectboxColumn("Nível", options=["user", "admin"])})
+            if st.button("Salvar Acessos"):
+                novos = edited.to_dict('records')
+                lista_final = []
+                for n in novos:
+                    orig = next((u for u in db['users'] if u['email'] == n['email']), None)
+                    if orig: orig.update(n); lista_final.append(orig)
+                    else: lista_final.append(n)
+                db['users'] = lista_final
+                salvar_json(ARQ_USERS, db, sha, "Update Users"); st.success("Atualizado!"); time.sleep(1); st.rerun()
+    
+    with tab_pass:
+        st.write("Trocar senha:")
+        db, sha = carregar_json(ARQ_USERS)
+        lst = db.get("users", [])
+        sel_user = st.selectbox("Usuário:", [u['email'] for u in lst])
+        if sel_user:
+            p1 = st.text_input("Nova Senha", type="password"); p2 = st.text_input("Repetir Senha", type="password")
+            if st.button("Confirmar Troca"):
+                if p1 == p2:
+                    for u in lst:
+                        if u['email'] == sel_user: u['password'] = hash_senha(p1)
+                    db['users'] = lst
+                    salvar_json(ARQ_USERS, db, sha, "Update pass"); st.success("Senha atualizada!")
+                else: st.error("Senhas não conferem.")
+    
+    with tab_config:
+        st.write("Aparência:")
+        with st.form("conf_geral"):
+            cn = st.text_input("Nome", NOME_ESCOLA); cc = st.color_picker("Cor", COR_TEMA); cl = st.text_input("Logo", LOGO_URL)
+            if st.form_submit_button("Salvar"):
+                _, s_c = carregar_json(ARQ_CONFIG)
+                salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, s_c, "Upd Config"); st.rerun()
