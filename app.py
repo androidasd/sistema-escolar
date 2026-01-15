@@ -62,3 +62,277 @@ def enviar_email_boas_vindas(destinatario, nome_usuario):
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(remetente.strip(), senha_app)
+        server.sendmail(remetente.strip(), destinatario, msg.as_string())
+        server.quit()
+        return True, "Enviado"
+    except Exception as e: return False, str(e)
+
+# --- CONEXÃO GITHUB ---
+BRANCH_ATUAL = "main" 
+try:
+    TOKEN = st.secrets["GITHUB_TOKEN"]
+    auth = Auth.Token(TOKEN)
+    g = Github(auth=auth)
+    user = g.get_user()
+    
+    # Busca repositório
+    NOME_REPO = "sistema-escolar"
+    try:
+        repo_ref = user.get_repo(NOME_REPO)
+    except:
+        repo_ref = None
+        for r in user.get_repos():
+            if "sistema" in r.name.lower():
+                repo_ref = r; break
+    
+    if not repo_ref:
+        st.error(f"❌ Repositório '{NOME_REPO}' não encontrado.")
+        st.stop()
+        
+    BRANCH_ATUAL = repo_ref.default_branch
+
+except Exception as e:
+    st.error(f"Erro Github: {e}"); st.stop()
+
+# --- DETECTOR INTELIGENTE DE ARQUIVOS ---
+# O sistema vai procurar arquivos que CONTENHAM estas palavras
+KEYWORD_PASSIVOS = "PA-RESSACA" 
+KEYWORD_CONCLUINTES = "CONCLU"   # Pega Concluintes, Conclusões, Conclusão...
+KEYWORD_USERS = "json"           # Pega users.json ou usuários.json
+
+def encontrar_arquivo_real(keyword_list, extensao):
+    """Varre o GitHub e acha o nome verdadeiro do arquivo"""
+    try:
+        conteudos = repo_ref.get_contents("", ref=BRANCH_ATUAL)
+        for arquivo in conteudos:
+            nome = arquivo.name
+            if extensao in nome and any(k in nome.upper() for k in keyword_list):
+                return nome
+    except: pass
+    return None
+
+# Descobre os nomes reais agora
+NOME_REAL_PASSIVOS = encontrar_arquivo_real(["PASSIVO", "RESSACA", "EMEF"], ".docx")
+NOME_REAL_CONCLUINTES = encontrar_arquivo_real(["CONCLU"], ".docx")
+NOME_REAL_USERS = encontrar_arquivo_real(["USER", "USUÁRIO", "USUARIO"], ".json")
+ARQ_CONFIG = 'config.json'
+
+# Se não achar o users, define um padrão (mas avisa no log)
+if not NOME_REAL_USERS: NOME_REAL_USERS = "users.json"
+
+# --- OPERAÇÕES DE ARQUIVO ---
+def carregar_json(arquivo):
+    try:
+        content = repo_ref.get_contents(arquivo, ref=BRANCH_ATUAL)
+        return json.loads(content.decoded_content.decode()), content.sha
+    except: return {}, None
+
+def salvar_json(arquivo, dados, sha, mensagem):
+    try:
+        dados_str = json.dumps(dados, indent=4)
+        if sha: repo_ref.update_file(arquivo, mensagem, dados_str, sha, branch=BRANCH_ATUAL)
+        else: repo_ref.create_file(arquivo, mensagem, dados_str, branch=BRANCH_ATUAL)
+        return True
+    except: return False
+
+@st.cache_data(ttl=60)
+def carregar_dados_word():
+    lista_final = []
+    
+    def processar(nome_arq_real, categoria):
+        local = []
+        if not nome_arq_real: return [] # Se não achou o arquivo, retorna vazio sem erro
+        
+        try:
+            c = repo_ref.get_contents(nome_arq_real, ref=BRANCH_ATUAL)
+            doc = Document(io.BytesIO(c.decoded_content))
+            for tabela in doc.tables:
+                for linha in tabela.rows:
+                    if len(linha.cells) >= 2:
+                        num = linha.cells[0].text.strip()
+                        nome = linha.cells[1].text.strip().upper()
+                        obs = linha.cells[2].text.strip() if len(linha.cells) > 2 else ""
+                        if len(nome) > 3 and "NOME" not in nome:
+                            local.append({"Numero": num, "Nome": nome, "Categoria": categoria, "Obs": obs})
+            return local
+        except Exception as e:
+            st.error(f"Erro lendo {nome_arq_real}: {e}")
+            return []
+            
+    # Usa os nomes descobertos automaticamente
+    l1 = processar(NOME_REAL_PASSIVOS, "Passivo")
+    l2 = processar(NOME_REAL_CONCLUINTES, "Concluinte")
+    
+    # Se uma das listas estiver vazia, avisa discretamente
+    if not l1 and not l2:
+        st.warning("⚠️ Nenhum aluno encontrado. Verifique se os arquivos estão no GitHub.")
+    
+    return l1 + l2
+
+def salvar_aluno_word(nome_arq_real, numero, nome, obs):
+    if not nome_arq_real: return False
+    try:
+        c = repo_ref.get_contents(nome_arq_real, ref=BRANCH_ATUAL)
+        doc = Document(io.BytesIO(c.decoded_content))
+        if len(doc.tables) > 0:
+            tab = doc.tables[0]
+            row = tab.add_row()
+            row.cells[0].text = numero
+            row.cells[1].text = nome.upper()
+            if len(row.cells) > 2: row.cells[2].text = obs
+            buffer = io.BytesIO()
+            doc.save(buffer)
+            repo_ref.update_file(nome_arq_real, f"Add Aluno: {nome}", buffer.getvalue(), c.sha, branch=BRANCH_ATUAL)
+            return True
+    except: return False
+
+config_data, config_sha = carregar_json(ARQ_CONFIG)
+COR_TEMA = config_data.get("theme_color", ST_COR_PADRAO)
+NOME_ESCOLA = config_data.get("school_name", ST_TITULO_PADRAO)
+LOGO_URL = config_data.get("logo_url", "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
+
+# --- LOGIN ---
+if 'user_info' not in st.session_state: st.session_state['user_info'] = None
+
+if not st.session_state['user_info']:
+    col_e, col_c, col_d = st.columns([5, 3, 5])
+    with col_c:
+        with st.container():
+            st.markdown(f"""
+            <div class="login-container" style="text-align:center;">
+                <img src="{LOGO_URL}" width="70" style="margin-bottom:10px;">
+                <h3 style="color:{COR_TEMA}; margin:0; font-weight:700;">{NOME_ESCOLA}</h3>
+                <p style="color:gray; font-size:12px;">Gestão Acadêmica</p>
+                <hr style="opacity:0.2; margin: 15px 0;">
+                <small style="color:#ddd; font-size:10px;">
+                    Arquivos: {NOME_REAL_PASSIVOS or '❌'} | {NOME_REAL_CONCLUINTES or '❌'}
+                </small>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            tab1, tab2 = st.tabs(["ENTRAR", "CADASTRAR"])
+            with tab1:
+                with st.form("login_frm"):
+                    email = st.text_input("E-mail")
+                    senha = st.text_input("Senha", type="password")
+                    if st.form_submit_button("ACESSAR", use_container_width=True):
+                        try: s_adm = st.secrets["SENHA_SISTEMA"]
+                        except: s_adm = "admin"
+                        if email.lower() == "admin@gmail.com" and senha == s_adm:
+                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@gmail.com", "unit": "DIRETORIA"}
+                            st.rerun()
+                        db, _ = carregar_json(NOME_REAL_USERS)
+                        u = next((x for x in db.get("users", []) if x.get('email', '').lower() == email.lower() and x['password'] == hash_senha(senha)), None)
+                        if u:
+                            if u.get('status') == 'active': st.session_state['user_info'] = u; st.rerun()
+                            else: st.warning("Cadastro em análise.")
+                        else: st.error("Dados inválidos.")
+            with tab2:
+                with st.form("reg_frm"):
+                    n = st.text_input("Nome"); e = st.text_input("E-mail"); s = st.text_input("Senha", type="password")
+                    if st.form_submit_button("CRIAR CONTA", use_container_width=True):
+                        if "@" not in e: st.error("E-mail inválido")
+                        else:
+                            db, sha = carregar_json(NOME_REAL_USERS)
+                            lst = db.get("users", [])
+                            if any(x.get('email') == e for x in lst): st.error("E-mail já existe.")
+                            else:
+                                with st.spinner("Criando..."):
+                                    lst.append({"username": e.split("@")[0], "password": hash_senha(s), "name": n, "email": e, "role": "user", "status": "pending", "unit": "Geral"})
+                                    if not db: db = {"users": []}
+                                    db['users'] = lst
+                                    salvar_json(NOME_REAL_USERS, db, sha, f"Reg {e}")
+                                    enviar_email_boas_vindas(e, n)
+                                    st.success("Solicitação enviada!")
+    st.stop()
+
+# --- ÁREA LOGADA ---
+user = st.session_state['user_info']
+with st.container():
+    c_logo, c_user = st.columns([2, 3])
+    with c_logo:
+        st.markdown(f"""<div style="display:flex; align-items:center; gap:12px;"><img src="{LOGO_URL}" width="40"><div><h4 style="margin:0; color:{COR_TEMA}; font-weight:800;">{NOME_ESCOLA}</h4></div></div>""", unsafe_allow_html=True)
+    with c_user:
+        c_info, c_logout = st.columns([4, 1])
+        with c_info:
+            with st.expander(f"👤 {user['name'].split()[0]}", expanded=False):
+                st.markdown(f"""<div class="profile-popup-box"><strong>{user['name']}</strong><br><small>{user.get('email')}</small><br><span style="color:{COR_TEMA}; font-weight:bold;">{user['role'].upper()}</span></div>""", unsafe_allow_html=True)
+        with c_logout:
+            if st.button("SAIR"): st.session_state['user_info'] = None; st.rerun()
+st.divider()
+
+opts = ["Dashboard", "Pesquisar", "Cadastrar Aluno"]
+icons = ["house", "search", "person-plus"]
+if user['role'] == 'admin': opts.append("Administração"); icons.append("gear")
+
+selected = option_menu(menu_title=None, options=opts, icons=icons, default_index=0, orientation="horizontal", styles={"container": {"padding": "0!important", "background-color": "#ffffff"}, "icon": {"color": COR_TEMA}, "nav-link-selected": {"background-color": COR_TEMA, "color": "white"}})
+st.write("")
+
+if selected in ["Dashboard", "Pesquisar"]: df = pd.DataFrame(carregar_dados_word())
+
+if selected == "Dashboard":
+    st.subheader("📊 Visão Geral")
+    if not df.empty:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total", len(df)); col2.metric("Concluintes", len(df[df['Categoria']=="Concluinte"])); col3.metric("Passivos", len(df[df['Categoria']=="Passivo"]))
+        st.write(""); st.markdown("##### 📌 Últimas Atualizações")
+        st.dataframe(df.tail(8), use_container_width=True, hide_index=True)
+    else: st.info("Carregando dados...")
+
+elif selected == "Pesquisar":
+    st.subheader("🔍 Buscar Aluno")
+    busca = st.text_input("Nome:", placeholder="Digite...")
+    if busca and not df.empty:
+        res = df[df['Nome'].str.contains(busca.upper(), na=False)]
+        st.dataframe(res, use_container_width=True, hide_index=True)
+    elif busca: st.warning("Não encontrado.")
+
+elif selected == "Cadastrar Aluno":
+    st.subheader("📝 Nova Matrícula")
+    with st.container():
+        with st.form("novo_aluno_form"):
+            c1, c2 = st.columns([1, 4])
+            num = c1.text_input("Nº")
+            nome = c2.text_input("Nome")
+            c3, c4 = st.columns(2)
+            tipo = c3.radio("Situação", ["Passivos", "Concluintes"], horizontal=True)
+            obs = c4.text_input("Obs")
+            if st.form_submit_button("💾 SALVAR"):
+                # Usa a variável inteligente descoberta no início
+                arq_destino = NOME_REAL_PASSIVOS if tipo == "Passivos" else NOME_REAL_CONCLUINTES
+                
+                if not arq_destino:
+                    st.error("ERRO: O arquivo de destino não foi encontrado no GitHub. Verifique os nomes.")
+                else:
+                    if not num: num = "S/N"
+                    if salvar_aluno_word(arq_destino, num, nome, obs): 
+                        st.toast(f"Salvo em {arq_destino}!", icon="✅"); time.sleep(1); st.cache_data.clear(); st.rerun()
+                    else: st.error("Erro ao salvar.")
+
+elif selected == "Administração":
+    st.subheader("⚙️ Configurações")
+    tab1, tab2, tab3 = st.tabs(["Usuários", "Senhas", "Sistema"])
+    with tab1:
+        db, sha = carregar_json(NOME_REAL_USERS)
+        if db.get("users"):
+            df_u = pd.DataFrame(db['users'])
+            edited = st.data_editor(df_u, key="editor_users", use_container_width=True, column_config={"status": st.column_config.SelectboxColumn("Acesso", options=["active", "pending"]), "role": st.column_config.SelectboxColumn("Nível", options=["user", "admin"])})
+            if st.button("Salvar Acessos"):
+                db['users'] = edited.to_dict('records')
+                salvar_json(NOME_REAL_USERS, db, sha, "Update Users"); st.success("Ok!"); time.sleep(1); st.rerun()
+    with tab2:
+        db, sha = carregar_json(NOME_REAL_USERS)
+        emails = [u['email'] for u in db.get("users", [])]
+        sel = st.selectbox("Usuário:", emails)
+        p1 = st.text_input("Nova Senha", type="password"); p2 = st.text_input("Repetir", type="password")
+        if st.button("Trocar"):
+            if p1 == p2:
+                for u in db['users']: 
+                    if u['email'] == sel: u['password'] = hash_senha(p1)
+                salvar_json(NOME_REAL_USERS, db, sha, "Pass"); st.success("Ok!")
+            else: st.error("Senhas diferentes.")
+    with tab3:
+        with st.form("conf"):
+            cn = st.text_input("Nome", NOME_ESCOLA); cc = st.color_picker("Cor", COR_TEMA); cl = st.text_input("Logo", LOGO_URL)
+            if st.form_submit_button("Salvar"):
+                salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, config_sha, "Config"); st.rerun()
