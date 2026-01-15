@@ -211,8 +211,8 @@ if not st.session_state['user_info']:
                         try: s_adm = st.secrets["SENHA_SISTEMA"]
                         except: s_adm = "admin"
                         # Login Admin
-                        if email.lower() == "admin@gmail.com" and senha == s_adm:
-                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@gmail.com", "unit": "DIRETORIA"}
+                        if email.lower() == "admin@emeifparessaca.com" and senha == s_adm:
+                            st.session_state['user_info'] = {"username": "Admin", "name": "Administrador Principal", "role": "admin", "email": "admin@emeifparessaca.com", "unit": "DIRETORIA"}
                             st.rerun()
                         # Login Normal
                         db, _ = carregar_json(ARQ_USERS)
@@ -374,3 +374,4 @@ elif selected == "Administração":
             if st.form_submit_button("Salvar"):
                 _, s_c = carregar_json(ARQ_CONFIG)
                 salvar_json(ARQ_CONFIG, {"school_name": cn, "theme_color": cc, "logo_url": cl}, s_c, "Upd Config"); st.rerun()
+
